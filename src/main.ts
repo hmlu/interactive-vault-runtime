@@ -1,74 +1,33 @@
-import { Notice, Plugin } from "obsidian";
-import { minesweeperProject } from "./projects/minesweeper";
+import { Notice, Plugin, type MarkdownPostProcessorContext } from "obsidian";
 import { VaultProjectStorage } from "./platform/vault-storage";
 import { parseProjectDirective } from "./runtime/directive";
+import { VaultProjectLoader } from "./runtime/project-loader";
 import { ProjectRenderChild } from "./runtime/project-render-child";
-import { ProjectRegistry } from "./runtime/registry";
 import { PROJECT_VIEW_TYPE, ProjectView } from "./runtime/project-view";
-import type { DisplayMode, ProjectContext } from "./runtime/types";
+import type {
+  DisplayMode,
+  LoadedInteractiveProject,
+  ProjectContext,
+} from "./runtime/types";
 
 export default class InteractiveVaultRuntimePlugin extends Plugin {
-  readonly registry = new ProjectRegistry();
+  loader!: VaultProjectLoader;
 
   async onload(): Promise<void> {
-    this.registry.register(minesweeperProject);
+    this.loader = new VaultProjectLoader(this.app);
 
     this.registerView(
       PROJECT_VIEW_TYPE,
       (leaf) => new ProjectView(leaf, this),
     );
 
-    this.registerMarkdownCodeBlockProcessor(
-      "obs-game",
-      (source, element, markdownContext) => {
-        try {
-          const directive = parseProjectDirective(source);
-          const project = this.registry.get(directive.id);
-
-          if (!project) {
-            element.createDiv({
-              cls: "ogr-error",
-              text: `找不到互动项目：${directive.id}`,
-            });
-            return;
-          }
-
-          if (directive.mode === "view") {
-            const launchButton = element.createEl("button", {
-              cls: "mod-cta ogr-launch-button",
-              text: `打开${project.title}`,
-            });
-            this.registerDomEvent(launchButton, "click", () => {
-              void this.openProject(project.id);
-            });
-            return;
-          }
-
-          markdownContext.addChild(
-            new ProjectRenderChild(
-              element,
-              project,
-              this.createProjectContext(project.id, "embedded", markdownContext.sourcePath),
-            ),
-          );
-        } catch (error) {
-          element.createDiv({
-            cls: "ogr-error",
-            text: error instanceof Error ? error.message : "无法加载互动项目",
-          });
-        }
-      },
-    );
-
-    this.addRibbonIcon("bomb", "打开扫雷", () => {
-      void this.openProject("minesweeper");
-    });
-
-    this.addCommand({
-      id: "open-minesweeper",
-      name: "打开扫雷",
-      callback: () => void this.openProject("minesweeper"),
-    });
+    for (const language of ["interactive-vault", "obs-game"]) {
+      this.registerMarkdownCodeBlockProcessor(
+        language,
+        (source, element, markdownContext) =>
+          this.renderDirective(source, element, markdownContext),
+      );
+    }
   }
 
   async onunload(): Promise<void> {
@@ -76,23 +35,23 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
   }
 
   createProjectContext(
-    projectId: string,
+    project: LoadedInteractiveProject,
     displayMode: DisplayMode,
     sourcePath?: string,
   ): ProjectContext {
     return {
-      app: this.app,
       displayMode,
       sourcePath,
-      storage: new VaultProjectStorage(this.app, projectId),
-      openInView: (id) => this.openProject(id),
+      storage: new VaultProjectStorage(this.app, project.manifest.id),
+      openInView: () => this.openProject(project.manifestPath, project.manifest.id),
     };
   }
 
-  async openProject(projectId: string): Promise<void> {
-    const project = this.registry.get(projectId);
-    if (!project) {
-      new Notice(`找不到互动项目：${projectId}`);
+  async openProject(manifestPath: string, expectedId?: string): Promise<void> {
+    try {
+      await this.loader.load(manifestPath, expectedId);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : "无法加载互动应用");
       return;
     }
 
@@ -100,8 +59,51 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
     await leaf.setViewState({
       type: PROJECT_VIEW_TYPE,
       active: true,
-      state: { projectId },
+      state: { manifestPath, expectedId },
     });
     await this.app.workspace.revealLeaf(leaf);
+  }
+
+  private async renderDirective(
+    source: string,
+    element: HTMLElement,
+    markdownContext: MarkdownPostProcessorContext,
+  ): Promise<void> {
+    element.createDiv({ cls: "ogr-loading", text: "正在加载互动应用…" });
+    try {
+      const directive = parseProjectDirective(source);
+      const manifestPath = this.loader.resolveManifestPath(directive, markdownContext.sourcePath);
+      const project = await this.loader.load(manifestPath, directive.id);
+      element.empty();
+
+      if (directive.mode === "view") {
+        const launchButton = element.createEl("button", {
+          cls: "mod-cta ogr-launch-button",
+          text: `打开${project.manifest.title}`,
+        });
+        this.registerDomEvent(launchButton, "click", () => {
+          void this.openProject(project.manifestPath, project.manifest.id);
+        });
+        return;
+      }
+
+      markdownContext.addChild(
+        new ProjectRenderChild(
+          element,
+          project,
+          this.createProjectContext(
+            project,
+            directive.mode ?? "embedded",
+            markdownContext.sourcePath,
+          ),
+        ),
+      );
+    } catch (error) {
+      element.empty();
+      element.createDiv({
+        cls: "ogr-error",
+        text: error instanceof Error ? error.message : "无法加载互动应用",
+      });
+    }
   }
 }

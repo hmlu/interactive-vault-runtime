@@ -1,9 +1,9 @@
 {
-  "id": "obs-game-runtime",
+  "id": "interactive-vault-runtime",
   "name": "Interactive Vault Runtime",
   "version": "0.1.0",
   "minAppVersion": "1.6.0",
-  "description": "Runs interactive games and applications inside this vault.",
+  "description": "Loads trusted interactive application packages from an Obsidian vault.",
   "author": "luhongming",
   "isDesktopOnly": false
 }

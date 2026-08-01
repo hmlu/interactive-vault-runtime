@@ -1,5 +1,3 @@
-import type { App } from "obsidian";
-
 export type DisplayMode = "embedded" | "view";
 
 export interface ProjectStorage<T> {
@@ -9,22 +7,35 @@ export interface ProjectStorage<T> {
 }
 
 export interface ProjectContext {
-  app: App;
   displayMode: DisplayMode;
   sourcePath?: string;
   storage: ProjectStorage<unknown>;
-  openInView(projectId: string): Promise<void>;
+  openInView(): Promise<void>;
 }
 
-export interface InteractiveProject {
+export interface InteractiveProjectManifest {
+  schemaVersion: 1;
   id: string;
   title: string;
-  description: string;
-  icon: string;
-  mount(container: HTMLElement, context: ProjectContext): () => void;
+  description?: string;
+  icon?: string;
+  entry: string;
+  styles?: string[];
+}
+
+export interface InteractiveProjectModule {
+  mount(container: HTMLElement, context: ProjectContext): void | (() => void);
+}
+
+export interface LoadedInteractiveProject {
+  manifestPath: string;
+  manifest: InteractiveProjectManifest;
+  module: InteractiveProjectModule;
+  styleSources: string[];
 }
 
 export interface ProjectDirective {
-  id: string;
+  id?: string;
+  manifest?: string;
   mode?: DisplayMode;
 }

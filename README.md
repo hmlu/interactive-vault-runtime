@@ -1,46 +1,53 @@
 # Interactive Vault Runtime
 
-一个面向 Obsidian 桌面端和移动端的互动游戏运行插件。插件识别 Markdown 中的 `obs-game` 代码块，并以内嵌界面或独立标签页运行已注册的游戏。
+一个面向 Obsidian 桌面端和移动端的通用互动应用运行插件。插件本身不内置游戏或业务应用，只负责从 Vault 加载可信的应用包、挂载界面、管理独立视图，并提供存档能力。
 
-当前内置项目：
+## 应用包协议
 
-- 扫雷：三档难度、首击保护、鼠标与触控操作、自动存档。
+每个应用位于 Vault 中自己的目录，至少包含：
 
-## 开发
-
-```bash
-npm install
-npm run check
+```text
+project.json
+dist/main.js
+dist/styles.css
 ```
 
-## 安装到本地 Vault
+`project.json` 使用 `schemaVersion: 1`，通过 `entry` 和 `styles` 指向目录内的构建产物。入口是无外部依赖的 CommonJS bundle，并导出：
 
-先构建，再将三个插件文件复制到目标 Vault：
-
-```bash
-npm run build
-npm run install:vault -- ../obs-game
+```ts
+export function mount(container: HTMLElement, context: ProjectContext): void | (() => void);
 ```
 
-然后在 Obsidian 的“设置 → 第三方插件”中启用 `Interactive Vault Runtime`。
-
-## Markdown 用法
+插件通过应用所在笔记旁的 manifest 加载项目：
 
 ````markdown
-```obs-game
-id: minesweeper
+```interactive-vault
+id: sample-app
 mode: embedded
 ```
 ````
 
-`mode: view` 会显示一个用于打开独立应用标签页的按钮。
+也可以显式指定 Vault 路径：
+
+````markdown
+```interactive-vault
+manifest: tools/sample-app/project.json
+mode: view
+```
+````
+
+旧的 `obs-game` 代码块名称暂时作为兼容别名保留。应用包中的 JavaScript 会以插件权限运行，只应加载自己信任的内容。
+
+## 开发与本地安装
+
+```bash
+npm install
+npm run check
+npm run install:vault -- ../obs-game
+```
+
+然后重新加载 Obsidian，并在“设置 → 第三方插件”中启用 `Interactive Vault Runtime`。
 
 ## GitHub Release
 
-Release 的标签、名称和 `manifest.json` 版本必须一致，例如 `0.1.0`。发布附件必须包含：
-
-- `main.js`
-- `manifest.json`
-- `styles.css`
-
-推送版本标签后，仓库内的 GitHub Actions 工作流会执行检查并创建 Release。
+Release 标签、名称和 `manifest.json` 版本必须一致，例如 `0.1.0`。推送版本标签后，GitHub Actions 会检查并发布 `main.js`、`manifest.json` 和 `styles.css`。

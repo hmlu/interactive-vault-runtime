@@ -29,9 +29,16 @@ export function parseProjectDirective(source: string): ProjectDirective {
 }
 
 function validateDirective(value: Partial<ProjectDirective>): ProjectDirective {
-  const id = typeof value.id === "string" ? value.id.trim() : "";
-  if (!id || !/^[a-z0-9][a-z0-9-]*$/.test(id)) {
+  const id = typeof value.id === "string" ? value.id.trim() : undefined;
+  const manifest = typeof value.manifest === "string" ? value.manifest.trim() : undefined;
+  if (id !== undefined && !/^[a-z0-9][a-z0-9-]*$/.test(id)) {
     throw new Error("项目 id 只能包含小写字母、数字和连字符");
+  }
+  if (manifest !== undefined && (!manifest || manifest.includes("\\") || manifest.includes(":"))) {
+    throw new Error("manifest 必须是 Vault 内的 JSON 文件路径");
+  }
+  if (!id && !manifest) {
+    throw new Error("至少需要项目 id 或 manifest 路径");
   }
 
   const mode = value.mode;
@@ -39,5 +46,9 @@ function validateDirective(value: Partial<ProjectDirective>): ProjectDirective {
     throw new Error("mode 只能是 embedded 或 view");
   }
 
-  return { id, mode };
+  const directive: ProjectDirective = {};
+  if (id) directive.id = id;
+  if (manifest) directive.manifest = manifest;
+  if (mode) directive.mode = mode;
+  return directive;
 }

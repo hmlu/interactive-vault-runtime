@@ -1,12 +1,12 @@
 import { MarkdownRenderChild } from "obsidian";
-import type { InteractiveProject, ProjectContext } from "./types";
+import type { LoadedInteractiveProject, ProjectContext } from "./types";
 
 export class ProjectRenderChild extends MarkdownRenderChild {
   private unmountProject?: () => void;
 
   constructor(
     containerEl: HTMLElement,
-    private readonly project: InteractiveProject,
+    private readonly project: LoadedInteractiveProject,
     private readonly context: ProjectContext,
   ) {
     super(containerEl);
@@ -14,7 +14,7 @@ export class ProjectRenderChild extends MarkdownRenderChild {
 
   onload(): void {
     this.containerEl.addClass("ogr-embed-host");
-    this.unmountProject = this.project.mount(this.containerEl, this.context);
+    this.unmountProject = mountProject(this.containerEl, this.project, this.context);
   }
 
   onunload(): void {
@@ -22,4 +22,22 @@ export class ProjectRenderChild extends MarkdownRenderChild {
     this.unmountProject = undefined;
     this.containerEl.empty();
   }
+}
+
+export function mountProject(
+  container: HTMLElement,
+  project: LoadedInteractiveProject,
+  context: ProjectContext,
+): () => void {
+  for (const source of project.styleSources) {
+    const style = container.createEl("style", { cls: "ivr-project-style" });
+    style.textContent = source;
+  }
+  const projectRoot = container.createDiv({ cls: "ivr-project-root" });
+  const cleanup = project.module.mount(projectRoot, context);
+
+  return () => {
+    if (typeof cleanup === "function") cleanup();
+    container.empty();
+  };
 }
