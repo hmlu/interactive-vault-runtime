@@ -68,7 +68,7 @@ mode: view
 - `embedded`：直接在 Markdown 中挂载；也是省略时的默认值。
 - `view`：Markdown 中显示按钮，点击后在独立标签页挂载。
 
-解析器也接受裸 ID（内容只有 `sample-app`）和 JSON 对象。`obs-game` 代码块语言仍可用，但只是兼容别名。
+解析器也接受裸 ID（内容只有 `sample-app`）和 JSON 对象。代码块语言名称固定为 `interactive-vault`。
 
 ## JavaScript 入口
 

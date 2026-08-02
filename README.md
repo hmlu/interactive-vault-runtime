@@ -39,7 +39,7 @@ mode: view
 ```
 ````
 
-旧的 `obs-game` 代码块名称暂时作为兼容别名保留。应用包中的 JavaScript 会以插件权限运行，只应加载自己信任的内容。
+应用包中的 JavaScript 会以插件权限运行，只应加载自己信任的内容。
 
 存档按 manifest ID 写入 Vault 的 `data/saves/<id>.json`。应用负责自己的数据格式、版本和迁移，插件只提供 JSON 整体读写。
 

@@ -24,7 +24,7 @@
 - `ProjectContext` 当前只有 `displayMode`、可选 `sourcePath`、`storage`、`openInView()`。
 - 存档固定写入 `data/saves/<manifest.id>.json`。插件不解释、不迁移应用数据。
 - 应用代码通过 `new Function` 以插件权限执行，不是安全沙箱。不要把“路径限制”描述为对恶意 bundle 的隔离。
-- `obs-game` 代码块语言是兼容别名；规范名称是 `interactive-vault`。
+- Markdown 代码块语言名称只有 `interactive-vault`，目前没有兼容别名。
 
 公共协议变化时，要同步检查同级内容仓库的 `games/shared/runtime.ts`、应用实现和两边文档。除非明确设计并迁移 schema，否则不要悄悄改变已发布 v1 行为。
 

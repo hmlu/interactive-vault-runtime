@@ -21,13 +21,11 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
       (leaf) => new ProjectView(leaf, this),
     );
 
-    for (const language of ["interactive-vault", "obs-game"]) {
-      this.registerMarkdownCodeBlockProcessor(
-        language,
-        (source, element, markdownContext) =>
-          this.renderDirective(source, element, markdownContext),
-      );
-    }
+    this.registerMarkdownCodeBlockProcessor(
+      "interactive-vault",
+      (source, element, markdownContext) =>
+        this.renderDirective(source, element, markdownContext),
+    );
   }
 
   async onunload(): Promise<void> {

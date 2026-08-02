@@ -25,7 +25,7 @@
 
 1. 创建单个 `VaultProjectLoader`。
 2. 注册 `interactive-vault-project` ItemView。
-3. 为规范语言名 `interactive-vault` 与兼容别名 `obs-game` 注册 Markdown 代码块处理器。
+3. 为语言名 `interactive-vault` 注册 Markdown 代码块处理器。
 
 卸载插件时，所有该类型的独立视图都会被关闭。Markdown 嵌入实例由 Obsidian 的 `MarkdownRenderChild` 生命周期管理。
 
