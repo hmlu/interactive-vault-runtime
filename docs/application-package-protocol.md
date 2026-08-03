@@ -2,6 +2,8 @@
 
 本文面向为 Interactive Vault Runtime 编写应用的内容仓库维护者，记录当前代码实际支持的协议。
 
+第一次开发应用时，建议先按照[互动应用开发指南](application-development-guide.md)完成可运行示例，再把本文作为 API 和兼容性参考。
+
 ## 目录与 manifest
 
 一个包由 Vault 内的 `project.json` 及其同目录子树组成：
