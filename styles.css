@@ -1,4 +1,4 @@
-.ogr-view-host,
+.ogr-immersive-host,
 .ogr-embed-host {
   --ogr-border: var(--background-modifier-border);
   --ogr-muted: var(--text-muted);
@@ -8,9 +8,17 @@
   color: var(--text-normal);
 }
 
-.ogr-view-host {
+.ogr-immersive-host {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483646;
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
   min-height: 100%;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: max(18px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
     max(24px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   background:
@@ -18,11 +26,51 @@
     var(--background-primary);
 }
 
-.is-mobile .ogr-view-host {
-  --ivr-mobile-bottom-clearance: 112px;
-  padding-bottom: calc(var(--ivr-mobile-bottom-clearance) + env(safe-area-inset-bottom));
-  scroll-padding-bottom: calc(var(--ivr-mobile-bottom-clearance) + env(safe-area-inset-bottom));
+.is-mobile .ogr-immersive-host {
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  scroll-padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
   -webkit-overflow-scrolling: touch;
+}
+
+.ivr-exit-immersive {
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  right: max(10px, env(safe-area-inset-right));
+  z-index: 2147483647;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--text-normal) 20%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--background-primary) 76%, transparent);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 18%);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 650;
+  opacity: 0.46;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: opacity 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.ivr-exit-immersive:hover,
+.ivr-exit-immersive:focus-visible {
+  border-color: var(--interactive-accent);
+  color: var(--text-normal);
+  opacity: 1;
+  outline: none;
+}
+
+.ivr-exit-immersive__icon,
+.ivr-exit-immersive__icon svg {
+  display: block;
+  width: 15px;
+  height: 15px;
 }
 
 .ogr-embed-host {
@@ -51,7 +99,25 @@
 }
 
 @media (max-width: 560px) {
-  .ogr-view-host {
-    padding: 0;
+  .ivr-exit-immersive {
+    width: 36px;
+    min-height: 36px;
+    justify-content: center;
+    padding: 7px;
+  }
+
+  .ivr-exit-immersive > span:last-child {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ivr-exit-immersive {
+    transition: none;
   }
 }

@@ -9,7 +9,7 @@
 - 插件入口与 Obsidian 注册：`src/main.ts`
 - 应用包加载、校验与执行：`src/runtime/project-loader.ts`
 - Markdown 指令语法：`src/runtime/directive.ts`
-- 嵌入/独立视图生命周期：`src/runtime/project-render-child.ts`、`src/runtime/project-view.ts`
+- 嵌入/沉浸模式生命周期：`src/runtime/project-render-child.ts`、`src/runtime/project-view.ts`
 - Vault JSON 存储：`src/platform/vault-storage.ts`
 - 协议类型：`src/runtime/types.ts`
 - 完整架构：`docs/architecture.md`

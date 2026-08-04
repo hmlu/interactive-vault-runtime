@@ -1,6 +1,6 @@
 # Interactive Vault Runtime
 
-一个面向 Obsidian 桌面端和移动端的通用互动应用运行插件。插件本身不内置游戏或业务应用，只负责从 Vault 加载可信的应用包、挂载界面、管理独立视图，并提供存档能力。
+一个面向 Obsidian 桌面端和移动端的通用互动应用运行插件。插件本身不内置游戏或业务应用，只负责从 Vault 加载可信的应用包、挂载界面、管理沉浸模式，并提供存档能力。
 
 - [互动应用开发指南](docs/application-development-guide.md)：从零创建、构建、调试和分发应用
 - [应用包协议 v1](docs/application-package-protocol.md)：manifest、入口、Context 与兼容性参考
@@ -43,6 +43,8 @@ manifest: tools/sample-app/project.json
 mode: view
 ```
 ````
+
+`mode: view` 是为兼容协议 v1 保留的技术值；面向用户时，该模式称为“沉浸模式”，会让应用覆盖当前 Obsidian 窗口并提供退出控件。
 
 应用包中的 JavaScript 会以插件权限运行，只应加载自己信任的内容。
 

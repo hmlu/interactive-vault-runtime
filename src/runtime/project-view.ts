@@ -1,4 +1,4 @@
-import { ItemView, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
+import { ItemView, setIcon, type ViewStateResult, type WorkspaceLeaf } from "obsidian";
 import type InteractiveVaultRuntimePlugin from "../main";
 import { mountProject } from "./project-render-child";
 
@@ -15,6 +15,7 @@ export class ProjectView extends ItemView {
   private projectTitle = "互动应用";
   private projectIcon = "blocks";
   private unmountProject?: () => void;
+  private immersiveEl?: HTMLElement;
   private renderVersion = 0;
 
   constructor(
@@ -47,6 +48,22 @@ export class ProjectView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    this.registerDomEvent(
+      this.contentEl.ownerDocument,
+      "keydown",
+      (event) => {
+        if (
+          event.key !== "Escape" ||
+          event.defaultPrevented ||
+          !this.immersiveEl?.isConnected
+        ) {
+          return;
+        }
+        event.preventDefault();
+        this.exitImmersiveMode();
+      },
+      { capture: true },
+    );
     this.readState(this.leaf.getViewState().state as ProjectViewState);
     await this.renderProject();
   }
@@ -55,6 +72,7 @@ export class ProjectView extends ItemView {
     this.renderVersion += 1;
     this.unmountProject?.();
     this.unmountProject = undefined;
+    this.removeImmersiveHost();
     this.contentEl.empty();
   }
 
@@ -67,24 +85,23 @@ export class ProjectView extends ItemView {
     const version = ++this.renderVersion;
     this.unmountProject?.();
     this.unmountProject = undefined;
-    this.contentEl.empty();
-    this.contentEl.addClass("ogr-view-host");
+    const host = this.prepareImmersiveHost();
 
     if (!this.manifestPath) {
       this.showError("缺少项目 manifest 路径");
       return;
     }
 
-    this.contentEl.createDiv({ cls: "ogr-loading", text: "正在加载互动应用…" });
+    host.createDiv({ cls: "ogr-loading", text: "正在加载互动应用…" });
     try {
       const project = await this.plugin.loader.load(this.manifestPath, this.expectedId);
       if (version !== this.renderVersion) return;
 
       this.projectTitle = project.manifest.title;
       this.projectIcon = project.manifest.icon || "blocks";
-      this.contentEl.empty();
+      const projectHost = this.prepareImmersiveHost();
       this.unmountProject = mountProject(
-        this.contentEl,
+        projectHost,
         project,
         this.plugin.createProjectContext(project, "view"),
       );
@@ -95,7 +112,36 @@ export class ProjectView extends ItemView {
   }
 
   private showError(message: string): void {
-    this.contentEl.empty();
-    this.contentEl.createDiv({ cls: "ogr-error", text: message });
+    const host = this.prepareImmersiveHost();
+    host.createDiv({ cls: "ogr-error", text: message });
+  }
+
+  private prepareImmersiveHost(): HTMLElement {
+    this.removeImmersiveHost();
+    const host = this.contentEl.ownerDocument.body.createDiv({ cls: "ogr-immersive-host" });
+    this.immersiveEl = host;
+
+    const exitButton = host.createEl("button", {
+      cls: "ivr-exit-immersive",
+      attr: {
+        type: "button",
+        "aria-label": "退出沉浸模式",
+        title: "退出沉浸模式（Esc）",
+      },
+    });
+    const icon = exitButton.createSpan({ cls: "ivr-exit-immersive__icon" });
+    setIcon(icon, "minimize-2");
+    exitButton.createSpan({ text: "退出沉浸" });
+    exitButton.addEventListener("click", () => this.exitImmersiveMode());
+    return host;
+  }
+
+  private removeImmersiveHost(): void {
+    this.immersiveEl?.remove();
+    this.immersiveEl = undefined;
+  }
+
+  private exitImmersiveMode(): void {
+    this.leaf.detach();
   }
 }

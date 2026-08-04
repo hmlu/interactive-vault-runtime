@@ -2,7 +2,7 @@
 
 ## 目标与非目标
 
-本插件为 Obsidian Vault 中的可信互动应用包提供最小运行层：从 Markdown 找到包、读取和验证入口、挂载嵌入界面或独立标签页、管理清理生命周期，并提供与业务无关的 JSON 存储。
+本插件为 Obsidian Vault 中的可信互动应用包提供最小运行层：从 Markdown 找到包、读取和验证入口、挂载嵌入界面或沉浸模式、管理清理生命周期，并提供与业务无关的 JSON 存储。
 
 插件刻意不负责：游戏业务、应用依赖管理、应用源码编译、应用商店/注册表、存档结构解释、跨设备同步和不可信代码沙箱。示例内容仓库是同级独立项目 `../obs-game/`。
 
@@ -10,14 +10,14 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/main.ts` | 注册代码块处理器和 ItemView，组织加载、上下文创建与打开独立视图 |
+| `src/main.ts` | 注册代码块处理器和 ItemView，组织加载、上下文创建与打开沉浸模式 |
 | `src/runtime/directive.ts` | 解析 bare ID、类 YAML 或 JSON 指令并校验字段 |
 | `src/runtime/project-loader.ts` | 解析 manifest 路径、校验 schema、限制包内路径、读取文件、执行 CommonJS bundle |
 | `src/runtime/project-render-child.ts` | 注入项目样式、创建项目根节点、调用 `mount()`、统一清理 |
-| `src/runtime/project-view.ts` | 保存/恢复独立标签页状态，防止异步旧渲染覆盖新状态 |
+| `src/runtime/project-view.ts` | 保存/恢复沉浸模式状态，提供退出控件并防止异步旧渲染覆盖新状态 |
 | `src/platform/vault-storage.ts` | 将通用存储接口适配到 Obsidian Vault adapter |
 | `src/runtime/types.ts` | 运行时内部及对应用暴露的协议类型 |
-| `styles.css` | 插件宿主层的加载、错误、嵌入和独立视图样式变量 |
+| `styles.css` | 插件宿主层的加载、错误、嵌入和沉浸模式样式变量 |
 
 ## 启动与注册
 
@@ -27,7 +27,7 @@
 2. 注册 `interactive-vault-project` ItemView。
 3. 为语言名 `interactive-vault` 注册 Markdown 代码块处理器。
 
-卸载插件时，所有该类型的独立视图都会被关闭。Markdown 嵌入实例由 Obsidian 的 `MarkdownRenderChild` 生命周期管理。
+卸载插件时，所有该类型的沉浸模式都会被关闭。Markdown 嵌入实例由 Obsidian 的 `MarkdownRenderChild` 生命周期管理。
 
 ## 嵌入渲染路径
 
@@ -41,9 +41,9 @@ Markdown code block
   -> application mount(projectRoot, context)
 ```
 
-指令的 `mode: view` 是例外：Markdown 中只创建启动按钮，点击后新建独立标签页。默认或 `embedded` 模式才直接挂载应用。
+指令的 `mode: view` 是例外：Markdown 中只创建启动按钮，点击后新建承载沉浸模式的 leaf。默认或 `embedded` 模式才直接挂载应用。`view` 是协议 v1 的兼容值，用户界面统一称为“沉浸模式”。
 
-## 独立视图路径
+## 沉浸模式路径
 
 `openProject()` 先执行一次加载验证，失败时用 Obsidian Notice 报错；成功后在新 leaf 设置 view state：
 
@@ -51,7 +51,7 @@ Markdown code block
 { manifestPath, expectedId }
 ```
 
-`ProjectView` 可从 workspace state 恢复这两个字段，再次加载应用并用 `displayMode: "view"` 挂载。每次渲染递增 `renderVersion`，异步加载完成时若版本已过期就放弃结果，避免快速切换或关闭后的旧结果写回 UI。
+`ProjectView` 可从 workspace state 恢复这两个字段，再次加载应用并用 `displayMode: "view"` 挂载。沉浸宿主作为固定定位覆盖层挂到当前 Obsidian 窗口的 `document.body`，避免受到 ItemView 上层布局容器的定位或裁剪限制，并提供“退出沉浸”按钮和 `Escape` 快捷键；退出时关闭对应 leaf，宿主 DOM 与覆盖样式随生命周期一并移除，由 Obsidian 恢复先前页面。每次渲染递增 `renderVersion`，异步加载完成时若版本已过期就放弃结果，避免快速切换或关闭后的旧结果写回 UI。
 
 关闭或重渲染前会先调用上一个应用的卸载函数，然后清空容器。
 
@@ -79,9 +79,9 @@ Markdown code block
 
 每次挂载都会创建新的 `ProjectContext`：
 
-- `displayMode` 反映当前是嵌入还是独立标签页。
-- `sourcePath` 只在 Markdown 嵌入路径传入；独立视图当前为 `undefined`。
-- `openInView()` 捕获当前 manifest 路径与 ID，并打开新标签页。
+- `displayMode` 反映当前是嵌入还是沉浸模式；为兼容协议，沉浸模式仍使用值 `view`。
+- `sourcePath` 只在 Markdown 嵌入路径传入；沉浸模式当前为 `undefined`。
+- `openInView()` 捕获当前 manifest 路径与 ID，并进入新的沉浸模式。
 - `storage` 是按 manifest ID 创建的 `VaultProjectStorage`。
 
 存储路径固定为 `data/saves/<id>.json`。`load()` 对不存在、读取失败或 JSON 解析失败统一返回 `null`，并把读取错误写入 console。`save()` 和 `clear()` 在实例内通过 Promise 队列串行执行；首次保存会逐级创建 `data/` 和 `data/saves/`。插件不校验业务数据，也不做 schema 迁移、原子临时文件替换、跨实例锁或冲突合并。
@@ -108,4 +108,4 @@ GitHub Actions 在推送版本标签时再次运行 `check`，验证标签与 `m
 - 加载器变化：复查路径逃逸、扩展名、错误信息和可信代码说明。
 - 生命周期变化：复查嵌入卸载、标签页恢复、快速重渲染与插件卸载。
 - 存储变化：复查写入排序、失败后的队列行为、多实例并发和移动端 adapter。
-- 样式变化：在桌面/移动、深色/浅色、嵌入/独立视图中手工检查。
+- 样式变化：在桌面/移动、深色/浅色、嵌入/沉浸模式中手工检查，并确认退出后 Obsidian 界面恢复。

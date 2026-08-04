@@ -77,7 +77,7 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
       if (directive.mode === "view") {
         const launchButton = element.createEl("button", {
           cls: "mod-cta ogr-launch-button",
-          text: `打开${project.manifest.title}`,
+          text: `进入${project.manifest.title}沉浸模式`,
         });
         this.registerDomEvent(launchButton, "click", () => {
           void this.openProject(project.manifestPath, project.manifest.id);

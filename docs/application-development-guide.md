@@ -1,6 +1,6 @@
 # 互动应用开发指南
 
-本文面向使用 Interactive Vault Runtime 开发 Vault 互动应用的作者。读完后，你可以从零创建一个应用包，将它嵌入 Obsidian 笔记，在独立标签页中打开，并使用 Vault 文件保存状态。
+本文面向使用 Interactive Vault Runtime 开发 Vault 互动应用的作者。读完后，你可以从零创建一个应用包，将它嵌入 Obsidian 笔记，在沉浸模式中打开，并使用 Vault 文件保存状态。
 
 如果你只需要查询字段、路径和兼容性规则，请直接查看[应用包协议 v1](application-package-protocol.md)。如果你要修改 Runtime 本身，请查看[架构与源码导览](architecture.md)。
 
@@ -205,7 +205,7 @@ export function mount(
 
   const openView = document.createElement("button");
   openView.type = "button";
-  openView.textContent = "在独立标签页打开";
+  openView.textContent = "进入沉浸模式";
   openView.hidden = context.displayMode === "view";
 
   const render = (): void => {
@@ -349,7 +349,7 @@ mode: embedded
 
 以 `./` 或 `../` 开头的路径相对当前笔记目录解析。
 
-### 显示独立标签页启动按钮
+### 显示沉浸模式启动按钮
 
 ````markdown
 ```interactive-vault
@@ -358,7 +358,7 @@ mode: view
 ```
 ````
 
-`mode: view` 不会在笔记内挂载应用，而是显示一个启动按钮。点击后，Runtime 在新的 Obsidian leaf 中打开应用。
+`mode: view` 不会在笔记内挂载应用，而是显示一个启动按钮。点击后，Runtime 在新的 Obsidian leaf 中进入沉浸模式。`view` 是协议 v1 保留的技术值，用户界面统一使用“沉浸模式”。
 
 解析器还接受一行裸 ID 和 JSON 对象，但建议项目文档统一使用上面的类 YAML 格式。完整语法见[应用包协议](application-package-protocol.md#markdown-指令)。
 
@@ -378,13 +378,13 @@ interface ProjectContext {
 当前挂载位置：
 
 - `embedded`：应用直接嵌入 Markdown。
-- `view`：应用位于独立标签页。
+- `view`：应用位于沉浸模式；该值为兼容协议保留。
 
-应用可以据此调整布局，但不应假设固定宽度。独立标签页在手机上仍可能很窄。
+应用可以据此调整布局，但不应假设固定宽度。沉浸模式会覆盖当前窗口，仍需适配手机窄屏、安全区和横竖屏。
 
 ### sourcePath
 
-Markdown 嵌入时通常是来源笔记的 Vault 路径。独立视图当前不提供此字段，因此应用必须处理 `undefined`。
+Markdown 嵌入时通常是来源笔记的 Vault 路径。沉浸模式当前不提供此字段，因此应用必须处理 `undefined`。
 
 不要根据 `sourcePath` 直接读取 Vault 文件；当前公开协议没有通用文件读取能力。
 
@@ -410,7 +410,7 @@ interface ProjectStorage<T> {
 
 ### openInView()
 
-从当前应用打开同一 manifest 的新独立标签页。调用会重新加载并挂载应用，因此不能假设页面只有一个实例。
+从当前应用进入同一 manifest 的沉浸模式。调用会重新加载并挂载应用，因此不能假设页面只有一个实例。
 
 ## 6. 生命周期要求
 
@@ -418,7 +418,7 @@ Runtime 可能在以下情况卸载应用：
 
 - 用户关闭笔记、标签页或 Obsidian。
 - Markdown 重新渲染。
-- 独立视图改变状态或恢复 workspace。
+- 沉浸模式改变状态或恢复 workspace。
 - Runtime 插件被禁用或重新加载。
 
 cleanup 应同步释放所有由本次挂载创建的资源，包括：
@@ -443,7 +443,7 @@ cleanup 应同步释放所有由本次挂载创建的资源，包括：
 | `entry` | 是 | 包目录内相对 `.js` 路径 |
 | `styles` | 否 | 包目录内相对 `.css` 路径数组 |
 | `description` | 否 | 当前加载但不展示 |
-| `icon` | 否 | Obsidian 图标名；独立视图默认使用 `blocks` |
+| `icon` | 否 | Obsidian 图标名；沉浸模式默认使用 `blocks` |
 
 Runtime 会忽略未知 manifest 字段，应用不应依赖它们被传入 `mount()`。字段的精确校验和路径规则见[应用包协议](application-package-protocol.md#目录与-manifest)。
 
@@ -455,7 +455,7 @@ Runtime 会忽略未知 manifest 字段，应用不应依赖它们被传入 `mou
 npm run dev:counter
 ```
 
-构建完成后，让 Obsidian 重新渲染入口笔记，或者关闭并重新打开独立标签页。Runtime 每次加载都会重新读取 bundle 和 CSS。
+构建完成后，让 Obsidian 重新渲染入口笔记，或者退出并重新进入沉浸模式。Runtime 每次加载都会重新读取 bundle 和 CSS。
 
 桌面端可以使用 Obsidian 开发者工具查看 console。Runtime 为入口脚本设置了类似下面的 source URL，便于定位 bundle：
 
@@ -489,7 +489,7 @@ interactive-vault://apps/counter/dist/main.js
 
 交付前还应在真实 Obsidian 中手工验证：
 
-- 嵌入模式和独立视图。
+- 嵌入模式和沉浸模式，并确认退出后 Obsidian 界面恢复。
 - 桌面端和移动端。
 - 鼠标、键盘与触控。
 - 深色和浅色主题。
@@ -532,5 +532,5 @@ Runtime 通过 `new Function` 执行 bundle。路径校验只能避免配置错�
 - [ ] 存档有版本号、运行时校验和必要的迁移策略。
 - [ ] CSS 使用应用专属前缀，不污染 Obsidian。
 - [ ] manifest 引用的所有文件都已进入 Vault 和同步范围。
-- [ ] 已验证嵌入、独立视图、桌面、移动、深浅主题和输入方式。
+- [ ] 已验证嵌入、沉浸模式、退出恢复、桌面、移动、深浅主题和输入方式。
 - [ ] 已确认应用包来自可信来源，不把 Runtime 当作安全沙箱。

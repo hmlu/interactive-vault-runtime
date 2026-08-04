@@ -35,7 +35,7 @@ sample-app/
 | `id` | 是 | `/^[a-z0-9][a-z0-9-]*$/`，同时作为存档文件名 |
 | `title` | 是 | 非空字符串，用于按钮和标签页标题 |
 | `description` | 否 | 字符串；当前加载但不展示 |
-| `icon` | 否 | 字符串；作为 Obsidian 图标名，独立视图默认 `blocks` |
+| `icon` | 否 | 字符串；作为 Obsidian 图标名，沉浸模式默认 `blocks` |
 | `entry` | 是 | 项目目录内的相对 `.js` 路径 |
 | `styles` | 否 | 项目目录内相对 `.css` 路径数组 |
 
@@ -68,7 +68,7 @@ mode: view
 `manifest` 以 `./` 或 `../` 开头时相对来源笔记目录解析；其他路径相对 Vault 根目录解析。`mode` 只能是：
 
 - `embedded`：直接在 Markdown 中挂载；也是省略时的默认值。
-- `view`：Markdown 中显示按钮，点击后在独立标签页挂载。
+- `view`：Markdown 中显示按钮，点击后进入沉浸模式。该字符串是协议 v1 的兼容值。
 
 解析器也接受裸 ID（内容只有 `sample-app`）和 JSON 对象。代码块语言名称固定为 `interactive-vault`。
 
@@ -110,8 +110,8 @@ interface ProjectContext {
 }
 ```
 
-- `sourcePath` 在 Markdown 嵌入实例中是来源笔记的 Vault 路径；独立视图当前不保证提供。
-- `openInView()` 可以从嵌入应用打开同一 manifest 的新标签页。
+- `sourcePath` 在 Markdown 嵌入实例中是来源笔记的 Vault 路径；沉浸模式当前不保证提供。
+- `openInView()` 可以从嵌入应用进入同一 manifest 的沉浸模式。
 - 应用通常在内部把 `storage` 收窄为自己的版本化存档类型，但加载后仍须做运行时校验。
 
 ## 存储约定
