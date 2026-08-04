@@ -18,6 +18,13 @@
     var(--background-primary);
 }
 
+.is-mobile .ogr-view-host {
+  --ivr-mobile-bottom-clearance: 112px;
+  padding-bottom: calc(var(--ivr-mobile-bottom-clearance) + env(safe-area-inset-bottom));
+  scroll-padding-bottom: calc(var(--ivr-mobile-bottom-clearance) + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch;
+}
+
 .ogr-embed-host {
   margin: 1.5rem 0;
 }
