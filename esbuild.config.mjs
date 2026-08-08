@@ -8,7 +8,7 @@ const isProduction = process.argv[2] === "production";
 const context = await esbuild.context({
   entryPoints: [resolve(pluginDir, "src/main.ts")],
   bundle: true,
-  external: ["obsidian", "electron", "@codemirror/*", "@lezer/*"],
+  external: ["obsidian", "electron", "node:*", "@codemirror/*", "@lezer/*"],
   format: "cjs",
   target: "es2018",
   platform: "browser",

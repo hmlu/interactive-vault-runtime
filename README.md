@@ -1,10 +1,11 @@
 # Interactive Vault Runtime
 
-一个面向 Obsidian 桌面端和移动端的通用互动应用运行插件。插件本身不内置游戏或业务应用，只负责从 Vault 加载可信的应用包、挂载界面、管理沉浸模式，并提供存档能力。
+一个面向 Obsidian 桌面端和移动端的通用互动应用运行插件。插件本身不内置游戏或业务应用，只负责从 Vault 加载可信的应用包、挂载界面、管理沉浸模式，并提供存档与可选的局域网联机能力。
 
 - [互动应用开发指南](docs/application-development-guide.md)：从零创建、构建、调试和分发应用
 - [应用包协议 v1](docs/application-package-protocol.md)：manifest、入口、Context 与兼容性参考
 - [架构与源码导览](docs/architecture.md)
+- [局域网联机架构](docs/local-multiplayer.md)
 
 如果你是应用作者，请从开发指南开始；如果你在维护 Runtime 插件本身，请阅读架构文档。
 

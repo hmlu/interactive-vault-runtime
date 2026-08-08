@@ -1,4 +1,6 @@
 import { Notice, Plugin, type MarkdownPostProcessorContext } from "obsidian";
+import { MultiplayerChallengeModal } from "./multiplayer/challenge-modal";
+import { MultiplayerService } from "./multiplayer/multiplayer-service";
 import { VaultProjectStorage } from "./platform/vault-storage";
 import { parseProjectDirective } from "./runtime/directive";
 import { VaultProjectLoader } from "./runtime/project-loader";
@@ -12,9 +14,13 @@ import type {
 
 export default class InteractiveVaultRuntimePlugin extends Plugin {
   loader!: VaultProjectLoader;
+  multiplayer!: MultiplayerService;
+  private activeChallengeId: string | null = null;
 
   async onload(): Promise<void> {
     this.loader = new VaultProjectLoader(this.app);
+    this.multiplayer = new MultiplayerService();
+    this.register(this.multiplayer.subscribe(() => this.presentIncomingChallenge()));
 
     this.registerView(
       PROJECT_VIEW_TYPE,
@@ -30,6 +36,7 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
 
   async onunload(): Promise<void> {
     this.app.workspace.detachLeavesOfType(PROJECT_VIEW_TYPE);
+    await this.multiplayer.dispose();
   }
 
   createProjectContext(
@@ -42,7 +49,29 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
       sourcePath,
       storage: new VaultProjectStorage(this.app, project.manifest.id),
       openInView: () => this.openProject(project.manifestPath, project.manifest.id),
+      multiplayer: this.multiplayer.createProjectFacade(project),
     };
+  }
+
+  private presentIncomingChallenge(): void {
+    const challenge = this.multiplayer.getIncomingChallenge();
+    if (!challenge || challenge.challengeId === this.activeChallengeId) return;
+    this.activeChallengeId = challenge.challengeId;
+    new MultiplayerChallengeModal(this.app, challenge, (accept) => {
+      void (async () => {
+        if (accept) {
+          try {
+            await this.loader.load(challenge.project.manifestPath, challenge.project.id);
+          } catch (error) {
+            new Notice(error instanceof Error ? error.message : "本机无法加载受邀游戏");
+            accept = false;
+          }
+        }
+        const project = await this.multiplayer.respondToIncomingChallenge(accept);
+        this.activeChallengeId = null;
+        if (project) void this.openProject(project.manifestPath, project.id);
+      })();
+    }).open();
   }
 
   async openProject(manifestPath: string, expectedId?: string): Promise<void> {

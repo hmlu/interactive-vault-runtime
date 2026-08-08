@@ -2,9 +2,9 @@
 
 ## 目标与非目标
 
-本插件为 Obsidian Vault 中的可信互动应用包提供最小运行层：从 Markdown 找到包、读取和验证入口、挂载嵌入界面或沉浸模式、管理清理生命周期，并提供与业务无关的 JSON 存储。
+本插件为 Obsidian Vault 中的可信互动应用包提供通用运行层：从 Markdown 找到包、读取和验证入口、挂载嵌入界面或沉浸模式、管理清理生命周期，并提供与业务无关的 JSON 存储和可选局域网联机能力。
 
-插件刻意不负责：游戏业务、应用依赖管理、应用源码编译、应用商店/注册表、存档结构解释、跨设备同步和不可信代码沙箱。示例内容仓库是同级独立项目 `../obs-game/`。
+插件刻意不负责：游戏规则和状态同步策略、应用依赖管理、应用源码编译、应用商店/注册表、存档结构解释、Vault 文件跨设备同步、业务服务器和不可信代码沙箱。示例内容仓库是同级独立项目 `../obs-game/`。
 
 ## 模块地图
 
@@ -16,6 +16,9 @@
 | `src/runtime/project-render-child.ts` | 注入项目样式、创建项目根节点、调用 `mount()`、统一清理 |
 | `src/runtime/project-view.ts` | 保存/恢复沉浸模式状态，提供退出控件并防止异步旧渲染覆盖新状态 |
 | `src/platform/vault-storage.ts` | 将通用存储接口适配到 Obsidian Vault adapter |
+| `src/multiplayer/multiplayer-service.ts` | 插件级联机小队、WebRTC 连接、挑战与对局通道 |
+| `src/multiplayer/local-signaling-server.ts` | 桌面房主临时局域网 HTTP 信令端点 |
+| `src/multiplayer/protocol.ts` | 邀请、信令与跨设备消息校验 |
 | `src/runtime/types.ts` | 运行时内部及对应用暴露的协议类型 |
 | `styles.css` | 插件宿主层的加载、错误、嵌入和沉浸模式样式变量 |
 
@@ -83,10 +86,17 @@ Markdown code block
 - `sourcePath` 只在 Markdown 嵌入路径传入；沉浸模式当前为 `undefined`。
 - `openInView()` 捕获当前 manifest 路径与 ID，并进入新的沉浸模式。
 - `storage` 是按 manifest ID 创建的 `VaultProjectStorage`。
+- `multiplayer` 是按 manifest ID 隔离的可选联机门面；底层 `MultiplayerService` 属于插件生命周期，应用卸载只取消订阅，不会自动退出联机小队。
 
 存储路径固定为 `data/saves/<id>.json`。`load()` 对不存在、读取失败或 JSON 解析失败统一返回 `null`，并把读取错误写入 console。`save()` 和 `clear()` 在实例内通过 Promise 队列串行执行；首次保存会逐级创建 `data/` 和 `data/saves/`。插件不校验业务数据，也不做 schema 迁移、原子临时文件替换、跨实例锁或冲突合并。
 
 这意味着同一应用的多个挂载实例共享文件但不共享写队列。应用应减少无意义写入，自己版本化/校验存档，并谨慎处理多窗口或多设备并发。
+
+## 局域网联机
+
+`MultiplayerService` 在插件加载时创建，在插件卸载或用户主动退出小队时关闭。桌面房主启动临时 HTTP 信令端点，加入设备通过首页二维码提交申请；房主批准后，双方用该端点交换 WebRTC SDP，随后所有小队、挑战和游戏消息均走加密的 DataChannel。切换应用不会断开小队。
+
+Runtime 只管理成员、挑战、对局通道和消息大小，不解释游戏 payload。挑战按项目 ID 隔离，远端请求必须经本机确认并通过本地 manifest 加载校验后才能打开游戏。完整边界和状态机见[局域网联机架构](local-multiplayer.md)。
 
 ## 构建、安装与发布
 

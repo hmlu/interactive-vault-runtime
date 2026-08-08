@@ -121,3 +121,43 @@
     transition: none;
   }
 }
+
+.ogr-multiplayer-challenge-modal .modal-content {
+  display: grid;
+  gap: 14px;
+}
+
+.ogr-multiplayer-challenge-modal h2,
+.ogr-multiplayer-challenge-modal p {
+  margin: 0;
+}
+
+.ogr-multiplayer-challenge-eyebrow {
+  color: var(--interactive-accent);
+  font-size: var(--font-ui-smaller);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ogr-multiplayer-challenge-game {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+
+.ogr-multiplayer-challenge-game small,
+.ogr-multiplayer-challenge-description {
+  color: var(--text-muted);
+}
+
+.ogr-multiplayer-challenge-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}

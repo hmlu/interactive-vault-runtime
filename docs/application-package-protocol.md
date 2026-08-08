@@ -107,12 +107,22 @@ interface ProjectContext {
   sourcePath?: string;
   storage: ProjectStorage<unknown>;
   openInView(): Promise<void>;
+  multiplayer?: ProjectMultiplayer;
 }
 ```
 
 - `sourcePath` 在 Markdown 嵌入实例中是来源笔记的 Vault 路径；沉浸模式当前不保证提供。
 - `openInView()` 可以从嵌入应用进入同一 manifest 的沉浸模式。
 - 应用通常在内部把 `storage` 收窄为自己的版本化存档类型，但加载后仍须做运行时校验。
+- `multiplayer` 是可选能力。旧版 Runtime 或不支持联机的平台可以不提供；应用必须先做能力检测。
+
+### ProjectMultiplayer
+
+联机能力分为持续存在的“联机小队”和只属于当前项目的“对局”。`createParty()`、`joinParty()`、审批与退出用于首页等大厅应用；游戏通常只订阅快照、向在线成员发起 `challenge()`，并在对局建立后使用 `send()`/`onMessage()`。
+
+`subscribe()` 和 `onMessage()` 返回的清理函数必须在应用卸载时调用。调用清理函数不会断开小队；只有 `leaveParty()` 或插件卸载才关闭连接。游戏 payload 必须是 JSON 值，并应自行做版本化和运行时校验。
+
+桌面端可以创建小队；当前移动端实现支持扫码加入桌面房主。连接建立后使用 WebRTC DataChannel，切换笔记或游戏不会中断小队。
 
 ## 存储约定
 
