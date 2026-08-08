@@ -585,14 +585,64 @@ async function waitForIceGathering(connection: RTCPeerConnection): Promise<void>
 }
 
 async function postJson(endpoint: string, path: string, body: unknown): Promise<Record<string, unknown>> {
-  const response = await requestUrl({ url: `${endpoint}${path}`, method: "POST", contentType: "application/json", body: JSON.stringify(body), throw: false });
-  if (response.status < 200 || response.status >= 300) throw new Error(readResponseError(response.json));
-  return response.json as Record<string, unknown>;
+  return requestLanJson(endpoint, path, "POST", body);
 }
 
 async function getJson(endpoint: string, path: string): Promise<Record<string, unknown>> {
-  const response = await requestUrl({ url: `${endpoint}${path}`, method: "GET", throw: false });
-  if (response.status < 200 || response.status >= 300) throw new Error(readResponseError(response.json));
+  return requestLanJson(endpoint, path, "GET");
+}
+
+class LanResponseError extends Error {}
+
+async function requestLanJson(endpoint: string, path: string, method: "GET" | "POST", body?: unknown): Promise<Record<string, unknown>> {
+  const url = `${endpoint}${path}`;
+  if (Platform.isMobileApp) {
+    try {
+      return await fetchLanJson(url, method, body);
+    } catch (webError) {
+      if (webError instanceof LanResponseError) throw webError;
+      try {
+        return await requestUrlJson(url, method, body);
+      } catch (nativeError) {
+        if (nativeError instanceof LanResponseError) throw nativeError;
+        console.warn("[InteractiveVaultRuntime] 手机局域网请求失败", { webError, nativeError });
+        throw new Error("无法访问电脑的局域网地址。请在系统设置中允许 Obsidian 访问本地网络，并确认两台设备连接同一 Wi‑Fi且未使用访客网络");
+      }
+    }
+  }
+  return requestUrlJson(url, method, body);
+}
+
+async function fetchLanJson(url: string, method: "GET" | "POST", body?: unknown): Promise<Record<string, unknown>> {
+  const controller = new AbortController();
+  const timeout = globalThis.setTimeout(() => controller.abort(), 8000);
+  try {
+    const response = await fetch(url, {
+      method,
+      headers: method === "POST" ? { "Content-Type": "text/plain;charset=UTF-8" } : undefined,
+      body: method === "POST" ? JSON.stringify(body) : undefined,
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    const value = await response.json() as unknown;
+    if (!response.ok) throw new LanResponseError(readResponseError(value));
+    if (!value || typeof value !== "object" || Array.isArray(value)) throw new LanResponseError("局域网接入响应无效");
+    return value as Record<string, unknown>;
+  } finally {
+    globalThis.clearTimeout(timeout);
+  }
+}
+
+async function requestUrlJson(url: string, method: "GET" | "POST", body?: unknown): Promise<Record<string, unknown>> {
+  const response = await requestUrl({
+    url,
+    method,
+    contentType: method === "POST" ? "application/json" : undefined,
+    body: method === "POST" ? JSON.stringify(body) : undefined,
+    throw: false,
+  });
+  if (response.status < 200 || response.status >= 300) throw new LanResponseError(readResponseError(response.json));
+  if (!response.json || typeof response.json !== "object" || Array.isArray(response.json)) throw new LanResponseError("局域网接入响应无效");
   return response.json as Record<string, unknown>;
 }
 

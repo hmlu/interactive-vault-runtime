@@ -22,10 +22,11 @@ describe("desktop LAN signaling endpoint", () => {
     const endpoint = `http://127.0.0.1:${port}`;
     const joinResponse = await fetch(`${endpoint}/join`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "text/plain;charset=UTF-8" },
       body: JSON.stringify({ partyId: "party-test", token: "invite-1234567890abcdef", name: "测试手机" }),
     });
     expect(joinResponse.status).toBe(200);
+    expect(joinResponse.headers.get("access-control-allow-private-network")).toBe("true");
     const session = await joinResponse.json() as { peerId: string; secret: string };
     expect(joins).toEqual(["测试手机"]);
 
