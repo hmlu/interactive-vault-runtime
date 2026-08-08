@@ -244,9 +244,10 @@ export class MultiplayerService {
       void postJson(guestSignal.endpoint, "/leave", { peerId: guestSignal.peerId, secret: guestSignal.secret }).catch(() => undefined);
     }
     this.guestSignal = null;
-    this.guestPeer?.channel?.close();
-    this.guestPeer?.connection.close();
+    const guestPeer = this.guestPeer;
     this.guestPeer = null;
+    guestPeer?.channel?.close();
+    guestPeer?.connection.close();
     for (const peer of this.hostPeers.values()) {
       peer.channel?.close();
       peer.connection.close();
@@ -372,9 +373,8 @@ export class MultiplayerService {
       this.bindGuestChannel(record, event.channel);
     };
     connection.onconnectionstatechange = () => {
-      if (["failed", "closed", "disconnected"].includes(connection.connectionState) && this.party.status === "connected") {
-        this.party = { ...this.party, status: "joining", error: "与房主的连接已断开" };
-        this.notify();
+      if (["failed", "closed", "disconnected"].includes(connection.connectionState)) {
+        this.disconnectGuest(record, "与房主的连接已断开");
       }
     };
     await connection.setRemoteDescription({ type: "offer", sdp: message.sdp });
@@ -411,12 +411,24 @@ export class MultiplayerService {
       this.notify();
     };
     channel.onmessage = (event) => this.receiveWire(event.data);
-    channel.onclose = () => {
-      if (this.party.status !== "disconnected") {
-        this.party = { ...this.party, status: "joining", error: "房主已断开联机小队" };
-        this.notify();
-      }
-    };
+    channel.onclose = () => this.disconnectGuest(record, "房主已断开联机小队");
+  }
+
+  private disconnectGuest(record: PeerConnectionRecord, reason: string): void {
+    if (this.guestPeer !== record) return;
+    this.guestPeer = null;
+    const signal = this.guestSignal;
+    if (signal) signal.stopped = true;
+    this.guestSignal = null;
+    record.channel?.close();
+    record.connection.close();
+    for (const pending of this.pendingChallenges.values()) pending.resolve("cancelled");
+    this.pendingChallenges.clear();
+    this.incomingChallenge = null;
+    this.activeMatch = null;
+    this.pendingProjectMessages.clear();
+    this.party = { ...disconnectedParty(), error: reason };
+    this.notify();
   }
 
   private receiveWire(raw: unknown, authenticatedPeerId?: string): void {
