@@ -59,8 +59,17 @@ export class ProjectView extends ItemView {
         ) {
           return;
         }
-        event.preventDefault();
-        this.exitImmersiveMode();
+        const activeHost = this.immersiveEl;
+        queueMicrotask(() => {
+          if (
+            event.defaultPrevented ||
+            !activeHost?.isConnected ||
+            this.immersiveEl !== activeHost
+          ) {
+            return;
+          }
+          this.exitImmersiveMode();
+        });
       },
       { capture: true },
     );
