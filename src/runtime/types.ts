@@ -27,10 +27,13 @@ export interface MultiplayerJoinRequest {
 }
 
 export type MultiplayerPartyStatus = "disconnected" | "hosting" | "joining" | "connected";
+export type MultiplayerPairingRole = "lan-host" | "qr-host" | "qr-guest";
 
 export interface MultiplayerPartySnapshot {
   status: MultiplayerPartyStatus;
   canHost: boolean;
+  canScan: boolean;
+  pairingRole?: MultiplayerPairingRole;
   partyId?: string;
   invite?: string;
   localMember?: MultiplayerMember;

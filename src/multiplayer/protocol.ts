@@ -1,4 +1,5 @@
 import type { MultiplayerJson, MultiplayerMember } from "../runtime/types";
+import { deflateSync, inflateSync, strFromU8, strToU8 } from "fflate";
 
 export const MULTIPLAYER_WIRE_VERSION = 1;
 export const MAX_SIGNAL_BODY_BYTES = 96 * 1024;
@@ -10,6 +11,31 @@ export interface LanInvite {
   partyId: string;
   token: string;
 }
+
+export interface QrOfferInvite {
+  version: 2;
+  transport: "qr";
+  type: "offer";
+  partyId: string;
+  token: string;
+  expiresAt: number;
+  host: MultiplayerMember;
+  sdp: string;
+}
+
+export interface QrAnswerInvite {
+  version: 2;
+  transport: "qr";
+  type: "answer";
+  partyId: string;
+  token: string;
+  expiresAt: number;
+  hostId: string;
+  guest: MultiplayerMember;
+  sdp: string;
+}
+
+export type MultiplayerInvite = LanInvite | QrOfferInvite | QrAnswerInvite;
 
 export type SignalMessage =
   | { type: "offer"; sdp: string }
@@ -33,13 +59,20 @@ export function encodeInvite(invite: LanInvite): string {
   return `ivr-lan://join?data=${encodeURIComponent(JSON.stringify(invite))}`;
 }
 
-export function parseInvite(value: string): LanInvite {
+export function encodeQrInvite(invite: QrOfferInvite | QrAnswerInvite): string {
+  const compressed = deflateSync(strToU8(JSON.stringify(invite)), { level: 9 });
+  return `ivr-qr://pair?data=${encodeBase64Url(compressed)}`;
+}
+
+export function parseInvite(value: string): MultiplayerInvite {
   const trimmed = value.trim();
-  const prefix = "ivr-lan://join?data=";
-  if (!trimmed.startsWith(prefix)) throw new Error("邀请内容不是有效的 Interactive Vault 联机邀请");
+  const lanPrefix = "ivr-lan://join?data=";
+  const qrPrefix = "ivr-qr://pair?data=";
+  if (trimmed.startsWith(qrPrefix)) return parseQrInvite(trimmed.slice(qrPrefix.length));
+  if (!trimmed.startsWith(lanPrefix)) throw new Error("邀请内容不是有效的 Interactive Vault 联机邀请");
   let parsed: unknown;
   try {
-    parsed = JSON.parse(decodeURIComponent(trimmed.slice(prefix.length)));
+    parsed = JSON.parse(decodeURIComponent(trimmed.slice(lanPrefix.length)));
   } catch {
     throw new Error("联机邀请已损坏");
   }
@@ -54,6 +87,39 @@ export function parseInvite(value: string): LanInvite {
     invite.token.length < 16
   ) throw new Error("联机邀请格式无效或版本不受支持");
   return invite as LanInvite;
+}
+
+function parseQrInvite(encoded: string): QrOfferInvite | QrAnswerInvite {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(strFromU8(inflateSync(decodeBase64Url(encoded))));
+  } catch {
+    throw new Error("手机联机二维码已损坏");
+  }
+  if (!parsed || typeof parsed !== "object") throw new Error("手机联机二维码格式无效");
+  const invite = parsed as Record<string, unknown>;
+  const validBase = invite.version === 2 && invite.transport === "qr"
+    && typeof invite.partyId === "string" && invite.partyId.startsWith("party-")
+    && typeof invite.token === "string" && invite.token.length >= 16
+    && typeof invite.expiresAt === "number" && Number.isFinite(invite.expiresAt)
+    && typeof invite.sdp === "string" && invite.sdp.length > 0 && invite.sdp.length <= MAX_SIGNAL_BODY_BYTES;
+  if (!validBase || (invite.expiresAt as number) < Date.now()) throw new Error("手机联机二维码无效或已经过期");
+  if (invite.type === "offer" && isMember(invite.host) && invite.host.isHost) return invite as unknown as QrOfferInvite;
+  if (invite.type === "answer" && typeof invite.hostId === "string" && isMember(invite.guest) && !invite.guest.isHost) return invite as unknown as QrAnswerInvite;
+  throw new Error("手机联机二维码格式无效");
+}
+
+function encodeBase64Url(value: Uint8Array): string {
+  let binary = "";
+  for (const byte of value) binary += String.fromCharCode(byte);
+  return globalThis.btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function decodeBase64Url(value: string): Uint8Array {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) throw new Error("Invalid base64url");
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = globalThis.atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 export function randomId(prefix: string): string {
