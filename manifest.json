@@ -1,7 +1,7 @@
 {
   "id": "interactive-vault-runtime",
   "name": "Interactive Vault Runtime",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "minAppVersion": "1.6.0",
   "description": "Loads trusted interactive application packages from an Obsidian vault.",
   "author": "luhongming",
