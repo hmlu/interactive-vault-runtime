@@ -122,6 +122,12 @@
   }
 }
 
+.ogr-multiplayer-challenge-layer {
+  /* Immersive game hosts intentionally cover the Obsidian workspace. Incoming
+     challenges are global Runtime UI and must remain actionable above them. */
+  z-index: 2147483647 !important;
+}
+
 .ogr-multiplayer-challenge-modal .modal-content {
   display: grid;
   gap: 14px;

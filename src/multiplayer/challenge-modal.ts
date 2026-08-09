@@ -13,6 +13,7 @@ export class MultiplayerChallengeModal extends Modal {
   }
 
   onOpen(): void {
+    this.containerEl.addClass("ogr-multiplayer-challenge-layer");
     this.modalEl.addClass("ogr-multiplayer-challenge-modal");
     this.contentEl.createEl("p", { cls: "ogr-multiplayer-challenge-eyebrow", text: "联机对局邀请" });
     this.contentEl.createEl("h2", { text: `${this.challenge.peerName} 邀请你游玩` });
@@ -29,6 +30,7 @@ export class MultiplayerChallengeModal extends Modal {
   }
 
   onClose(): void {
+    this.containerEl.removeClass("ogr-multiplayer-challenge-layer");
     this.contentEl.empty();
     if (!this.answered) this.respond(false);
   }
