@@ -54,7 +54,7 @@ Markdown code block
 { manifestPath, expectedId }
 ```
 
-`ProjectView` 可从 workspace state 恢复这两个字段，再次加载应用并用 `displayMode: "view"` 挂载。沉浸宿主作为固定定位覆盖层挂到当前 Obsidian 窗口的 `document.body`，避免受到 ItemView 上层布局容器的定位或裁剪限制，并提供“退出沉浸”按钮和 `Escape` 快捷键；退出时关闭对应 leaf，宿主 DOM 与覆盖样式随生命周期一并移除，由 Obsidian 恢复先前页面。每次渲染递增 `renderVersion`，异步加载完成时若版本已过期就放弃结果，避免快速切换或关闭后的旧结果写回 UI。
+`ProjectView` 可从 workspace state 恢复这两个字段，再次加载应用并用 `displayMode: "view"` 挂载。沉浸宿主作为固定定位覆盖层挂到当前 Obsidian 窗口的 `document.body`，避免受到 ItemView 上层布局容器的定位或裁剪限制，并提供“退出沉浸”按钮和 `Escape` 快捷键；宿主同时作为 App 交互表面，默认关闭文本选择、长按菜单、拖拽与非输入区域编辑，输入控件和显式白名单区域仍可正常交互。退出时关闭对应 leaf，宿主 DOM 与覆盖样式随生命周期一并移除，由 Obsidian 恢复先前页面。每次渲染递增 `renderVersion`，异步加载完成时若版本已过期就放弃结果，避免快速切换或关闭后的旧结果写回 UI。
 
 关闭或重渲染前会先调用上一个应用的卸载函数，然后清空容器。
 
@@ -85,6 +85,7 @@ Markdown code block
 - `displayMode` 反映当前是嵌入还是沉浸模式；为兼容协议，沉浸模式仍使用值 `view`。
 - `sourcePath` 只在 Markdown 嵌入路径传入；沉浸模式当前为 `undefined`。
 - `openInView()` 捕获当前 manifest 路径与 ID，并进入新的沉浸模式。
+- 可选 `openProject()` 让目录型应用校验并打开另一个 manifest 的沉浸视图；旧 Runtime 下应用应回退到普通内部链接。
 - `storage` 是按 manifest ID 创建的 `VaultProjectStorage`。
 - `multiplayer` 是按 manifest ID 隔离的可选联机门面；底层 `MultiplayerService` 属于插件生命周期，应用卸载只取消订阅，不会自动退出联机小队。
 

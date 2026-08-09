@@ -86,6 +86,7 @@ export interface ProjectContext {
   sourcePath?: string;
   storage: ProjectStorage<unknown>;
   openInView(): Promise<void>;
+  openProject?(manifestPath: string, expectedId?: string): Promise<void>;
   multiplayer?: ProjectMultiplayer;
 }
 

@@ -49,6 +49,7 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
       sourcePath,
       storage: new VaultProjectStorage(this.app, project.manifest.id),
       openInView: () => this.openProject(project.manifestPath, project.manifest.id),
+      openProject: (manifestPath, expectedId) => this.openProject(manifestPath, expectedId),
       multiplayer: this.multiplayer.createProjectFacade(project),
     };
   }

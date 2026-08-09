@@ -118,8 +118,17 @@ export class ProjectView extends ItemView {
 
   private prepareImmersiveHost(): HTMLElement {
     this.removeImmersiveHost();
-    const host = this.contentEl.ownerDocument.body.createDiv({ cls: "ogr-immersive-host" });
+    const host = this.contentEl.ownerDocument.body.createDiv({
+      cls: "ogr-immersive-host",
+      attr: {
+        contenteditable: "false",
+        spellcheck: "false",
+        draggable: "false",
+        "data-ivr-app-surface": "true",
+      },
+    });
     this.immersiveEl = host;
+    this.installAppSurfaceGuards(host);
 
     const exitButton = host.createEl("button", {
       cls: "ivr-exit-immersive",
@@ -134,6 +143,27 @@ export class ProjectView extends ItemView {
     exitButton.createSpan({ text: "退出沉浸" });
     exitButton.addEventListener("click", () => this.exitImmersiveMode());
     return host;
+  }
+
+  private installAppSurfaceGuards(host: HTMLElement): void {
+    const closest = (target: EventTarget | null, selector: string): Element | null => {
+      if (!target || typeof (target as Element).closest !== "function") return null;
+      return (target as Element).closest(selector);
+    };
+    const editableSelector = "input, textarea, select, [contenteditable='true'], .ivr-allow-text-input";
+
+    host.addEventListener("beforeinput", (event) => {
+      if (!closest(event.target, editableSelector)) event.preventDefault();
+    });
+    host.addEventListener("selectstart", (event) => {
+      if (!closest(event.target, `${editableSelector}, .ivr-allow-select`)) event.preventDefault();
+    });
+    host.addEventListener("contextmenu", (event) => {
+      if (!closest(event.target, `${editableSelector}, .ivr-allow-context-menu`)) event.preventDefault();
+    });
+    host.addEventListener("dragstart", (event) => {
+      if (!closest(event.target, ".ivr-allow-drag")) event.preventDefault();
+    });
   }
 
   private removeImmersiveHost(): void {

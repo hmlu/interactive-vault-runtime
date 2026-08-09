@@ -19,11 +19,34 @@
   min-height: 100%;
   overflow: auto;
   overscroll-behavior: contain;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  caret-color: transparent;
   padding: max(18px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right))
     max(24px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
   background:
     radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--interactive-accent) 12%, transparent), transparent 38%),
     var(--background-primary);
+}
+
+.ogr-immersive-host :where(img, svg, canvas) {
+  -webkit-user-drag: none;
+}
+
+.ogr-immersive-host :where(
+  input,
+  textarea,
+  select,
+  [contenteditable="true"],
+  .ivr-allow-text-input,
+  .ivr-allow-select
+) {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+  caret-color: auto;
 }
 
 .is-mobile .ogr-immersive-host {

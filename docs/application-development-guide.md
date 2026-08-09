@@ -131,6 +131,7 @@ export interface ProjectContext {
   sourcePath?: string;
   storage: ProjectStorage<unknown>;
   openInView(): Promise<void>;
+  openProject?(manifestPath: string, expectedId?: string): Promise<void>;
 }
 ```
 
@@ -370,6 +371,7 @@ interface ProjectContext {
   sourcePath?: string;
   storage: ProjectStorage<unknown>;
   openInView(): Promise<void>;
+  openProject?(manifestPath: string, expectedId?: string): Promise<void>;
 }
 ```
 
@@ -411,6 +413,12 @@ interface ProjectStorage<T> {
 ### openInView()
 
 从当前应用进入同一 manifest 的沉浸模式。调用会重新加载并挂载应用，因此不能假设页面只有一个实例。
+
+### openProject()
+
+可选能力，用于游戏大厅等目录型应用直接打开另一个 manifest 的沉浸视图。`manifestPath` 使用 Vault 根路径，`expectedId` 用于防止路径指向了意外的应用。旧版 Runtime 可能不提供此方法，调用方必须保留普通内部链接作为回退。
+
+沉浸视图会作为 App 交互表面运行：默认禁止文本选择、长按菜单、拖拽和非输入区域的编辑事件。`input`、`textarea`、`select` 与显式的 `[contenteditable="true"]` 会自动放行；自定义控件可使用 `.ivr-allow-select`、`.ivr-allow-text-input`、`.ivr-allow-context-menu` 或 `.ivr-allow-drag` 选择性恢复能力。
 
 ## 6. 生命周期要求
 
