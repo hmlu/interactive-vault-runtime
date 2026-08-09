@@ -50,6 +50,7 @@ interface QrHostSession {
   expiresAt: number;
   connection: RTCPeerConnection;
   channel: RTCDataChannel;
+  connectionTimeout?: ReturnType<typeof globalThis.setTimeout>;
 }
 
 interface PendingChallenge {
@@ -77,6 +78,8 @@ export class MultiplayerService {
   private signalingServer: LocalSignalingServer | null = null;
   private guestSignal: GuestSignalSession | null = null;
   private qrHostSession: QrHostSession | null = null;
+  private qrInviteGeneration = 0;
+  private qrInvitePreparing = false;
   private hostPeers = new Map<string, PeerConnectionRecord>();
   private guestPeer: PeerConnectionRecord | null = null;
   private subscribers = new Set<() => void>();
@@ -98,6 +101,7 @@ export class MultiplayerService {
         return () => this.subscribers.delete(notify);
       },
       createParty: (displayName) => this.createParty(displayName),
+      inviteMore: () => this.inviteMore(),
       joinParty: (invite, displayName) => this.joinParty(invite, displayName),
       approveJoin: (requestId) => this.approveJoin(requestId),
       rejectJoin: (requestId) => this.rejectJoin(requestId),
@@ -231,35 +235,76 @@ export class MultiplayerService {
   private async createQrParty(displayName?: string): Promise<void> {
     this.leaveParty();
     const partyId = randomId("party");
+    const localMember: MultiplayerMember = { id: randomId("host"), name: normalizeName(displayName, "手机房主"), isHost: true };
+    this.party = {
+      status: "hosting",
+      canHost: true,
+      canScan: true,
+      pairingRole: "qr-host",
+      partyId,
+      localMember,
+      members: [localMember],
+      pendingJoinRequests: [],
+    };
+    this.notify();
+    try {
+      await this.prepareQrHostInvite();
+    } catch (error) {
+      if (this.party.partyId === partyId && this.party.localMember?.id === localMember.id) {
+        this.party = { ...disconnectedParty(), error: errorMessage(error) };
+        this.notify();
+      }
+      throw error;
+    }
+  }
+
+  private async inviteMore(): Promise<void> {
+    const local = this.party.localMember;
+    if (!local?.isHost) throw new Error("只有房主可以邀请其他设备");
+    if (this.party.pairingRole === "lan-host") {
+      if (this.party.invite) return;
+      throw new Error("当前电脑小队没有可用的邀请");
+    }
+    if (this.party.pairingRole !== "qr-host") throw new Error("当前小队不支持手机二维码邀请");
+    if (this.qrHostSession || this.qrInvitePreparing || this.party.pairingStatus) throw new Error("请先完成当前设备的配对");
+    await this.prepareQrHostInvite();
+  }
+
+  private async prepareQrHostInvite(): Promise<void> {
+    const localMember = this.party.localMember;
+    const partyId = this.party.partyId;
+    if (!localMember?.isHost || !partyId || this.party.pairingRole !== "qr-host") {
+      throw new Error("当前设备不是手机小队房主");
+    }
+    if (this.qrInvitePreparing) throw new Error("正在生成手机联机邀请");
+    this.qrInvitePreparing = true;
+    const generation = ++this.qrInviteGeneration;
     const token = randomId("invite");
     const expiresAt = Date.now() + 10 * 60_000;
-    const localMember: MultiplayerMember = { id: randomId("host"), name: normalizeName(displayName, "手机房主"), isHost: true };
     const connection = new RTCPeerConnection({ iceServers: [] });
     const channel = connection.createDataChannel("interactive-vault", { ordered: true });
     try {
       await connection.setLocalDescription(await connection.createOffer());
-      await waitForIceGathering(connection);
+      await waitForIceGathering(connection, 12_000);
+      if (generation !== this.qrInviteGeneration || this.party.partyId !== partyId || this.party.localMember?.id !== localMember.id) {
+        throw new Error("手机联机邀请已取消");
+      }
       const sdp = connection.localDescription?.sdp;
-      if (!sdp) throw new Error("无法创建手机联机邀请");
+      if (!sdp || !hasIceCandidate(sdp)) throw new Error("没有获取到可用的局域网连接地址，请保持 Wi-Fi 开启后重试");
       this.qrHostSession = { partyId, token, hostId: localMember.id, expiresAt, connection, channel };
       this.party = {
-        status: "hosting",
-        canHost: true,
-        canScan: true,
-        pairingRole: "qr-host",
-        partyId,
+        ...this.party,
+        pairingStatus: "awaiting-scan",
         invite: encodeQrInvite({ version: 2, transport: "qr", type: "offer", partyId, token, expiresAt, host: localMember, sdp }),
-        localMember,
-        members: [localMember],
-        pendingJoinRequests: [],
+        error: undefined,
       };
       this.notify();
     } catch (error) {
       channel.close();
       connection.close();
-      this.party = { ...disconnectedParty(), error: errorMessage(error) };
-      this.notify();
       throw error;
+    } finally {
+      if (generation === this.qrInviteGeneration) this.qrInvitePreparing = false;
     }
   }
 
@@ -291,11 +336,12 @@ export class MultiplayerService {
     try {
       await connection.setRemoteDescription({ type: "offer", sdp: invite.sdp });
       await connection.setLocalDescription(await connection.createAnswer());
-      await waitForIceGathering(connection);
+      await waitForIceGathering(connection, 12_000);
       const sdp = connection.localDescription?.sdp;
-      if (!sdp) throw new Error("无法生成手机联机回传码");
+      if (!sdp || !hasIceCandidate(sdp)) throw new Error("没有获取到可用的局域网连接地址，请保持 Wi-Fi 开启后重试");
       this.party = {
         ...this.party,
+        pairingStatus: "awaiting-scan",
         invite: encodeQrInvite({
           version: 2,
           transport: "qr",
@@ -325,16 +371,53 @@ export class MultiplayerService {
     if (invite.partyId !== session.partyId || invite.token !== session.token || invite.hostId !== session.hostId) {
       throw new Error("回传码不属于当前手机小队");
     }
-    if (this.hostPeers.size > 0) throw new Error("当前手机小队已经有一名伙伴");
-    await session.connection.setRemoteDescription({ type: "answer", sdp: invite.sdp });
+    if (this.hostPeers.has(invite.guest.id)) throw new Error("这台设备已经加入当前小队");
     const record: PeerConnectionRecord = { member: invite.guest, connection: session.connection, channel: session.channel };
     this.hostPeers.set(invite.guest.id, record);
-    this.bindHostChannel(record, session.channel);
+    this.bindHostChannel(record, session.channel, () => {
+      if (this.qrHostSession !== session) return;
+      if (session.connectionTimeout !== undefined) globalThis.clearTimeout(session.connectionTimeout);
+      this.qrHostSession = null;
+      this.party = { ...this.party, pairingStatus: undefined, invite: undefined, error: undefined };
+    });
     session.connection.onconnectionstatechange = () => {
-      if (["failed", "closed", "disconnected"].includes(session.connection.connectionState)) this.removeHostPeer(invite.guest.id);
+      const state = session.connection.connectionState;
+      if (state === "disconnected" && this.qrHostSession === session) return;
+      if (!["failed", "closed", "disconnected"].includes(state)) return;
+      if (this.qrHostSession === session) {
+        this.failQrHostPairing(session, record, "局域网连接未能建立，请确认两台设备连接同一 Wi-Fi 后重新邀请");
+      } else {
+        this.removeHostPeer(invite.guest.id);
+      }
     };
+    this.party = { ...this.party, pairingStatus: "connecting", invite: undefined, error: undefined };
+    this.notify();
+    session.connectionTimeout = globalThis.setTimeout(() => {
+      this.failQrHostPairing(session, record, "局域网连接超时，请确认两台设备连接同一 Wi-Fi 后重新邀请");
+    }, 20_000);
+    try {
+      await session.connection.setRemoteDescription({ type: "answer", sdp: invite.sdp });
+    } catch (error) {
+      this.failQrHostPairing(session, record, `无法应用手机回传信息：${errorMessage(error)}`);
+      throw error;
+    }
+  }
+
+  private failQrHostPairing(session: QrHostSession, record: PeerConnectionRecord, reason: string): void {
+    if (this.qrHostSession !== session) return;
+    if (session.connectionTimeout !== undefined) globalThis.clearTimeout(session.connectionTimeout);
     this.qrHostSession = null;
-    this.party = { ...this.party, invite: undefined, error: undefined };
+    if (this.hostPeers.get(record.member.id) === record) this.hostPeers.delete(record.member.id);
+    session.channel.close();
+    session.connection.close();
+    const hasRemoteMember = this.party.members.some((member) => member.id !== this.party.localMember?.id);
+    this.party = {
+      ...this.party,
+      status: hasRemoteMember ? "connected" : "hosting",
+      pairingStatus: undefined,
+      invite: undefined,
+      error: reason,
+    };
     this.notify();
   }
 
@@ -373,6 +456,8 @@ export class MultiplayerService {
   }
 
   private leaveParty(): void {
+    this.qrInviteGeneration += 1;
+    this.qrInvitePreparing = false;
     const guestSignal = this.guestSignal;
     if (guestSignal) {
       guestSignal.stopped = true;
@@ -381,6 +466,7 @@ export class MultiplayerService {
     this.guestSignal = null;
     const qrHostSession = this.qrHostSession;
     this.qrHostSession = null;
+    if (qrHostSession?.connectionTimeout !== undefined) globalThis.clearTimeout(qrHostSession.connectionTimeout);
     qrHostSession?.channel.close();
     qrHostSession?.connection.close();
     const guestPeer = this.guestPeer;
@@ -531,11 +617,12 @@ export class MultiplayerService {
     await record.connection.setRemoteDescription({ type: "answer", sdp: message.sdp });
   }
 
-  private bindHostChannel(record: PeerConnectionRecord, channel: RTCDataChannel): void {
+  private bindHostChannel(record: PeerConnectionRecord, channel: RTCDataChannel, onOpen?: () => void): void {
     channel.onopen = () => {
       if (!this.party.members.some((member) => member.id === record.member.id)) {
         this.party = { ...this.party, status: "connected", members: [...this.party.members, record.member] };
       }
+      onOpen?.();
       this.broadcastPartyState();
       this.notify();
     };
@@ -546,7 +633,7 @@ export class MultiplayerService {
   private bindGuestChannel(record: PeerConnectionRecord, channel: RTCDataChannel): void {
     channel.onopen = () => {
       if (this.guestSignal) this.guestSignal.stopped = true;
-      this.party = { ...this.party, status: "connected", error: undefined };
+      this.party = { ...this.party, status: "connected", pairingStatus: undefined, invite: undefined, error: undefined };
       this.notify();
     };
     channel.onmessage = (event) => this.receiveWire(event.data);
@@ -684,7 +771,9 @@ export class MultiplayerService {
     record.channel?.close();
     record.connection.close();
     this.hostPeers.delete(peerId);
-    this.party = { ...this.party, status: this.hostPeers.size > 0 ? "connected" : "hosting", members: this.party.members.filter((member) => member.id !== peerId) };
+    const members = this.party.members.filter((member) => member.id !== peerId);
+    const hasRemoteMember = members.some((member) => member.id !== this.party.localMember?.id);
+    this.party = { ...this.party, status: hasRemoteMember ? "connected" : "hosting", members };
     if (this.activeMatch?.peerId === peerId) this.activeMatch = null;
     this.broadcastPartyState();
     this.notify();
@@ -721,10 +810,14 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "未知错误";
 }
 
-async function waitForIceGathering(connection: RTCPeerConnection): Promise<void> {
+function hasIceCandidate(sdp: string): boolean {
+  return /^a=candidate:/m.test(sdp);
+}
+
+async function waitForIceGathering(connection: RTCPeerConnection, timeoutMs = 5000): Promise<void> {
   if (connection.iceGatheringState === "complete") return;
   await new Promise<void>((resolve) => {
-    const timeout = globalThis.setTimeout(done, 5000);
+    const timeout = globalThis.setTimeout(done, timeoutMs);
     function done() {
       globalThis.clearTimeout(timeout);
       connection.removeEventListener("icegatheringstatechange", check);

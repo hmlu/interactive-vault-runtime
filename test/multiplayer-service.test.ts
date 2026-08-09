@@ -56,6 +56,9 @@ class FakePeerConnection {
   }
 
   async setRemoteDescription(description: RTCSessionDescriptionInit): Promise<void> {
+    if (description.type === "answer" && !this.channel.onopen) {
+      throw new Error("host channel lifecycle was not bound before applying the answer");
+    }
     this.remoteDescription = description as RTCSessionDescription;
   }
 
@@ -150,7 +153,7 @@ describe("MultiplayerService guest disconnection", () => {
 });
 
 describe("MultiplayerService phone QR pairing", () => {
-  it("keeps the host party alive while completing the offer and answer scan", async () => {
+  it("binds the channel before applying the answer and can invite devices sequentially", async () => {
     vi.stubGlobal("RTCPeerConnection", FakePeerConnection);
     const host = new MultiplayerService();
     const guest = new MultiplayerService();
@@ -180,7 +183,67 @@ describe("MultiplayerService phone QR pairing", () => {
       status: "connected",
       partyId: offer.partyId,
       invite: undefined,
+      pairingStatus: undefined,
     });
     expect(hostFacade.getSnapshot().party.members.map((member) => member.name)).toEqual(["房主手机", "加入手机"]);
+
+    await hostFacade.inviteMore!();
+    const nextOffer = hostFacade.getSnapshot().party;
+    expect(nextOffer).toMatchObject({
+      status: "connected",
+      partyId: offer.partyId,
+      pairingStatus: "awaiting-scan",
+    });
+    expect(nextOffer.invite).toMatch(/^IVRQR:/);
+    expect(nextOffer.invite).not.toBe(offer.invite);
+
+    const secondGuest = new MultiplayerService();
+    const secondGuestFacade = projectFacade(secondGuest);
+    await secondGuestFacade.joinParty(nextOffer.invite!, "第二台手机");
+    await hostFacade.joinParty(secondGuestFacade.getSnapshot().party.invite!, "房主手机");
+    const secondPeer = [...hostInternals.hostPeers.values()].find((candidate) => candidate.member.name === "第二台手机");
+    expect(secondPeer).toBeDefined();
+    (secondPeer!.channel as unknown as FakeDataChannel).readyState = "open";
+    (secondPeer!.channel as unknown as FakeDataChannel).onopen?.(new Event("open"));
+
+    expect(hostFacade.getSnapshot().party.members.map((member) => member.name)).toEqual(["房主手机", "加入手机", "第二台手机"]);
+  });
+
+  it("keeps existing members and allows retry when a new phone connection fails", async () => {
+    vi.stubGlobal("RTCPeerConnection", FakePeerConnection);
+    const host = new MultiplayerService();
+    const firstGuest = new MultiplayerService();
+    const hostFacade = projectFacade(host);
+    const firstGuestFacade = projectFacade(firstGuest);
+
+    await hostFacade.createParty("房主手机");
+    await firstGuestFacade.joinParty(hostFacade.getSnapshot().party.invite!, "已连接手机");
+    await hostFacade.joinParty(firstGuestFacade.getSnapshot().party.invite!, "房主手机");
+
+    const internals = host as unknown as MultiplayerServiceInternals;
+    const firstPeer = [...internals.hostPeers.values()][0];
+    (firstPeer.channel as unknown as FakeDataChannel).readyState = "open";
+    (firstPeer.channel as unknown as FakeDataChannel).onopen?.(new Event("open"));
+
+    await hostFacade.inviteMore!();
+    const secondGuest = new MultiplayerService();
+    const secondGuestFacade = projectFacade(secondGuest);
+    await secondGuestFacade.joinParty(hostFacade.getSnapshot().party.invite!, "失败手机");
+    await hostFacade.joinParty(secondGuestFacade.getSnapshot().party.invite!, "房主手机");
+    const pending = [...internals.hostPeers.values()].find((candidate) => candidate.member.name === "失败手机")!;
+    (pending.connection as unknown as FakePeerConnection).connectionState = "failed";
+    (pending.connection as unknown as FakePeerConnection).onconnectionstatechange?.();
+
+    expect(hostFacade.getSnapshot().party).toMatchObject({
+      status: "connected",
+      invite: undefined,
+      pairingStatus: undefined,
+    });
+    expect(hostFacade.getSnapshot().party.members.map((member) => member.name)).toEqual(["房主手机", "已连接手机"]);
+    expect(hostFacade.getSnapshot().party.error).toContain("局域网连接未能建立");
+
+    await hostFacade.inviteMore!();
+    expect(hostFacade.getSnapshot().party).toMatchObject({ status: "connected", pairingStatus: "awaiting-scan" });
+    expect(hostFacade.getSnapshot().party.invite).toMatch(/^IVRQR:/);
   });
 });

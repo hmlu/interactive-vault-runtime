@@ -28,12 +28,14 @@ export interface MultiplayerJoinRequest {
 
 export type MultiplayerPartyStatus = "disconnected" | "hosting" | "joining" | "connected";
 export type MultiplayerPairingRole = "lan-host" | "qr-host" | "qr-guest";
+export type MultiplayerPairingStatus = "awaiting-scan" | "connecting";
 
 export interface MultiplayerPartySnapshot {
   status: MultiplayerPartyStatus;
   canHost: boolean;
   canScan: boolean;
   pairingRole?: MultiplayerPairingRole;
+  pairingStatus?: MultiplayerPairingStatus;
   partyId?: string;
   invite?: string;
   localMember?: MultiplayerMember;
@@ -68,6 +70,7 @@ export interface ProjectMultiplayer {
   getSnapshot(): ProjectMultiplayerSnapshot;
   subscribe(listener: (snapshot: ProjectMultiplayerSnapshot) => void): () => void;
   createParty(displayName?: string): Promise<void>;
+  inviteMore?(): Promise<void>;
   joinParty(invite: string, displayName?: string): Promise<void>;
   approveJoin(requestId: string): Promise<void>;
   rejectJoin(requestId: string): void;
