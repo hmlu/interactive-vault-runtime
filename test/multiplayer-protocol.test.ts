@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { deflateSync, strToU8 } from "fflate";
 import { encodeInvite, encodeQrInvite, parseInvite, type QrAnswerInvite, type QrOfferInvite } from "../src/multiplayer/protocol";
 
 describe("LAN multiplayer invitations", () => {
@@ -39,9 +40,13 @@ describe("LAN multiplayer invitations", () => {
     };
 
     const encodedOffer = encodeQrInvite(offer);
+    expect(encodedOffer).toMatch(/^IVRQR:[0-9A-Z $%*+./:_-]+:$/);
     expect(encodedOffer.length).toBeLessThan(sdp.length / 2);
     expect(parseInvite(encodedOffer)).toEqual(offer);
     expect(parseInvite(encodeQrInvite(answer))).toEqual(answer);
+
+    const legacyPayload = Buffer.from(deflateSync(strToU8(JSON.stringify(offer)), { level: 9 })).toString("base64url");
+    expect(parseInvite(`ivr-qr://pair?data=${legacyPayload}`)).toEqual(offer);
   });
 
   it("rejects expired phone pairing codes", () => {

@@ -160,14 +160,14 @@ describe("MultiplayerService phone QR pairing", () => {
     await hostFacade.createParty("房主手机");
     const offer = hostFacade.getSnapshot().party;
     expect(offer).toMatchObject({ status: "hosting", pairingRole: "qr-host", canScan: true });
-    expect(offer.invite).toMatch(/^ivr-qr:\/\/pair\?data=/);
+    expect(offer.invite).toMatch(/^IVRQR:/);
     await expect(hostFacade.joinParty(offer.invite!, "房主手机")).rejects.toThrow("回传码");
     expect(hostFacade.getSnapshot().party).toMatchObject({ status: "hosting", partyId: offer.partyId });
 
     await guestFacade.joinParty(offer.invite!, "加入手机");
     const answer = guestFacade.getSnapshot().party;
     expect(answer).toMatchObject({ status: "joining", pairingRole: "qr-guest", canScan: true });
-    expect(answer.invite).toMatch(/^ivr-qr:\/\/pair\?data=/);
+    expect(answer.invite).toMatch(/^IVRQR:/);
 
     await hostFacade.joinParty(answer.invite!, "房主手机");
     const hostInternals = host as unknown as MultiplayerServiceInternals;

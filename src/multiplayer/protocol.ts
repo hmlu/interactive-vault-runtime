@@ -61,14 +61,20 @@ export function encodeInvite(invite: LanInvite): string {
 
 export function encodeQrInvite(invite: QrOfferInvite | QrAnswerInvite): string {
   const compressed = deflateSync(strToU8(JSON.stringify(invite)), { level: 9 });
-  return `ivr-qr://pair?data=${encodeBase64Url(compressed)}`;
+  return `IVRQR:${encodeBase45(compressed)}:`;
 }
 
 export function parseInvite(value: string): MultiplayerInvite {
   const trimmed = value.trim();
   const lanPrefix = "ivr-lan://join?data=";
-  const qrPrefix = "ivr-qr://pair?data=";
-  if (trimmed.startsWith(qrPrefix)) return parseQrInvite(trimmed.slice(qrPrefix.length));
+  const compactQrPrefix = "IVRQR:";
+  const legacyQrPrefix = "ivr-qr://pair?data=";
+  if (trimmed.startsWith(compactQrPrefix) && trimmed.endsWith(":")) {
+    return parseQrInvite(decodeQrPayload(trimmed.slice(compactQrPrefix.length, -1), decodeBase45));
+  }
+  if (trimmed.startsWith(legacyQrPrefix)) {
+    return parseQrInvite(decodeQrPayload(trimmed.slice(legacyQrPrefix.length), decodeBase64Url));
+  }
   if (!trimmed.startsWith(lanPrefix)) throw new Error("邀请内容不是有效的 Interactive Vault 联机邀请");
   let parsed: unknown;
   try {
@@ -89,10 +95,10 @@ export function parseInvite(value: string): MultiplayerInvite {
   return invite as LanInvite;
 }
 
-function parseQrInvite(encoded: string): QrOfferInvite | QrAnswerInvite {
+function parseQrInvite(compressed: Uint8Array): QrOfferInvite | QrAnswerInvite {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(strFromU8(inflateSync(decodeBase64Url(encoded))));
+    parsed = JSON.parse(strFromU8(inflateSync(compressed)));
   } catch {
     throw new Error("手机联机二维码已损坏");
   }
@@ -109,10 +115,55 @@ function parseQrInvite(encoded: string): QrOfferInvite | QrAnswerInvite {
   throw new Error("手机联机二维码格式无效");
 }
 
-function encodeBase64Url(value: Uint8Array): string {
-  let binary = "";
-  for (const byte of value) binary += String.fromCharCode(byte);
-  return globalThis.btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+function decodeQrPayload(value: string, decode: (encoded: string) => Uint8Array): Uint8Array {
+  try {
+    return decode(value);
+  } catch {
+    throw new Error("手机联机二维码已损坏");
+  }
+}
+
+const BASE45_ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+
+function encodeBase45(value: Uint8Array): string {
+  let encoded = "";
+  for (let index = 0; index < value.length; index += 2) {
+    if (index + 1 < value.length) {
+      let pair = value[index]! * 256 + value[index + 1]!;
+      const first = pair % 45;
+      pair = Math.floor(pair / 45);
+      const second = pair % 45;
+      const third = Math.floor(pair / 45);
+      encoded += BASE45_ALPHABET[first]! + BASE45_ALPHABET[second]! + BASE45_ALPHABET[third]!;
+    } else {
+      const first = value[index]! % 45;
+      const second = Math.floor(value[index]! / 45);
+      encoded += BASE45_ALPHABET[first]! + BASE45_ALPHABET[second]!;
+    }
+  }
+  return encoded;
+}
+
+function decodeBase45(value: string): Uint8Array {
+  if (value.length % 3 === 1) throw new Error("Invalid base45 length");
+  const decoded: number[] = [];
+  for (let index = 0; index < value.length; index += 3) {
+    const remaining = value.length - index;
+    const first = BASE45_ALPHABET.indexOf(value[index]!);
+    const second = BASE45_ALPHABET.indexOf(value[index + 1]!);
+    if (first < 0 || second < 0) throw new Error("Invalid base45 character");
+    if (remaining >= 3) {
+      const third = BASE45_ALPHABET.indexOf(value[index + 2]!);
+      const pair = first + second * 45 + third * 45 * 45;
+      if (third < 0 || pair > 0xffff) throw new Error("Invalid base45 value");
+      decoded.push(pair >> 8, pair & 0xff);
+    } else {
+      const byte = first + second * 45;
+      if (byte > 0xff) throw new Error("Invalid base45 value");
+      decoded.push(byte);
+    }
+  }
+  return Uint8Array.from(decoded);
 }
 
 function decodeBase64Url(value: string): Uint8Array {
