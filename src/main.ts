@@ -14,7 +14,7 @@ import type {
 } from "./runtime/types";
 
 interface RuntimeSettings {
-  languageOverride?: ProjectLanguage;
+  localeOverride?: ProjectLanguage | null;
 }
 
 export default class InteractiveVaultRuntimePlugin extends Plugin {
@@ -22,12 +22,15 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
   multiplayer!: MultiplayerService;
   private activeChallengeId: string | null = null;
   private languageOverride: ProjectLanguage | null = null;
-  private readonly languageListeners = new Set<(language: ProjectLanguage) => void>();
+  private readonly languageListeners = new Set<(
+    language: ProjectLanguage,
+    override: ProjectLanguage | null,
+  ) => void>();
 
   async onload(): Promise<void> {
     const settings = await this.loadData() as RuntimeSettings | null;
-    this.languageOverride = settings?.languageOverride === "zh" || settings?.languageOverride === "en"
-      ? settings.languageOverride
+    this.languageOverride = typeof settings?.localeOverride === "string" && settings.localeOverride.trim()
+      ? settings.localeOverride.trim()
       : null;
     this.loader = new VaultProjectLoader(this.app);
     this.multiplayer = new MultiplayerService();
@@ -64,6 +67,7 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
       multiplayer: this.multiplayer.createProjectFacade(project),
       localization: {
         getLanguage: () => this.getProjectLanguage(),
+        getLanguageOverride: () => this.getProjectLanguageOverride(),
         setLanguage: (language) => this.setProjectLanguage(language),
         subscribe: (listener) => {
           this.languageListeners.add(listener);
@@ -75,26 +79,39 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
 
   getProjectLanguage(): ProjectLanguage {
     if (this.languageOverride) return this.languageOverride;
-    return getLanguage().toLocaleLowerCase().startsWith("zh") ? "zh" : "en";
+    return getLanguage().trim().replaceAll("_", "-") || "en";
   }
 
-  subscribeProjectLanguage(listener: (language: ProjectLanguage) => void): () => void {
+  getProjectLanguageOverride(): ProjectLanguage | null {
+    return this.languageOverride;
+  }
+
+  isProjectLanguageChinese(): boolean {
+    return this.getProjectLanguage().toLocaleLowerCase().startsWith("zh");
+  }
+
+  subscribeProjectLanguage(
+    listener: (language: ProjectLanguage, override: ProjectLanguage | null) => void,
+  ): () => void {
     this.languageListeners.add(listener);
     return () => this.languageListeners.delete(listener);
   }
 
   getProjectTitle(project: LoadedInteractiveProject): string {
-    return this.getProjectLanguage() === "en" && project.manifest.titleI18n?.en
-      ? project.manifest.titleI18n.en
-      : project.manifest.title;
+    if (this.isProjectLanguageChinese()) return project.manifest.title;
+    const language = this.getProjectLanguage().toLocaleLowerCase();
+    const baseLanguage = language.split("-")[0];
+    const titles = project.manifest.titleI18n;
+    return titles?.[language] ?? titles?.[baseLanguage] ?? titles?.en ?? project.manifest.title;
   }
 
-  private async setProjectLanguage(language: ProjectLanguage): Promise<void> {
-    if (language !== "zh" && language !== "en") return;
-    if (this.languageOverride === language) return;
-    this.languageOverride = language;
-    for (const listener of this.languageListeners) listener(language);
-    await this.saveData({ languageOverride: language } satisfies RuntimeSettings);
+  private async setProjectLanguage(language: ProjectLanguage | null): Promise<void> {
+    const nextOverride = typeof language === "string" && language.trim() ? language.trim() : null;
+    if (this.languageOverride === nextOverride) return;
+    this.languageOverride = nextOverride;
+    const effectiveLanguage = this.getProjectLanguage();
+    for (const listener of this.languageListeners) listener(effectiveLanguage, nextOverride);
+    await this.saveData(nextOverride ? { localeOverride: nextOverride } : {} satisfies RuntimeSettings);
   }
 
   private presentIncomingChallenge(): void {
@@ -109,7 +126,7 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
           } catch (error) {
             new Notice(error instanceof Error
               ? error.message
-              : this.getProjectLanguage() === "en" ? "This device could not load the invited game" : "本机无法加载受邀游戏");
+              : this.isProjectLanguageChinese() ? "本机无法加载受邀游戏" : "This device could not load the invited game");
             accept = false;
           }
         }
@@ -126,7 +143,7 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
     } catch (error) {
       new Notice(error instanceof Error
         ? error.message
-        : this.getProjectLanguage() === "en" ? "Could not load the interactive app" : "无法加载互动应用");
+        : this.isProjectLanguageChinese() ? "无法加载互动应用" : "Could not load the interactive app");
       return;
     }
 
@@ -146,7 +163,7 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
   ): Promise<void> {
     element.createDiv({
       cls: "ogr-loading",
-      text: this.getProjectLanguage() === "en" ? "Loading interactive app…" : "正在加载互动应用…",
+      text: this.isProjectLanguageChinese() ? "正在加载互动应用…" : "Loading interactive app…",
     });
     try {
       const directive = parseProjectDirective(source);
@@ -157,9 +174,9 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
       if (directive.mode === "view") {
         const launchButton = element.createEl("button", {
           cls: "mod-cta ogr-launch-button",
-          text: this.getProjectLanguage() === "en"
-            ? `Open ${this.getProjectTitle(project)} in immersive mode`
-            : `进入${project.manifest.title}沉浸模式`,
+          text: this.isProjectLanguageChinese()
+            ? `进入${project.manifest.title}沉浸模式`
+            : `Open ${this.getProjectTitle(project)} in immersive mode`,
         });
         this.registerDomEvent(launchButton, "click", () => {
           void this.openProject(project.manifestPath, project.manifest.id);
@@ -184,7 +201,7 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
         cls: "ogr-error",
         text: error instanceof Error
           ? error.message
-          : this.getProjectLanguage() === "en" ? "Could not load the interactive app" : "无法加载互动应用",
+          : this.isProjectLanguageChinese() ? "无法加载互动应用" : "Could not load the interactive app",
       });
     }
   }

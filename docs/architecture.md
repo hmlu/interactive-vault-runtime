@@ -88,8 +88,8 @@ Markdown code block
 - 可选 `openProject()` 让目录型应用校验并打开另一个 manifest 的沉浸视图；旧 Runtime 下应用应回退到普通内部链接。
 - `storage` 是按 manifest ID 创建的 `VaultProjectStorage`。
 - `multiplayer` 是按 manifest ID 隔离的可选联机门面；底层 `MultiplayerService` 属于插件生命周期，应用卸载只取消订阅，不会自动退出联机小队。
-- `localization` 暴露全局中英文偏好的读取、设置与订阅；首次使用跟随 Obsidian 语言，用户从内容首页切换后由插件设置持久化。
-- manifest 可选的 `titleI18n.en` 用于英语模式下的标签页与启动入口标题；基础 `title` 仍为必填兼容字段。
+- `localization` 分别暴露当前生效语言与可空的用户覆盖值；默认跟随 Obsidian，用户选择具体语言后才持久化覆盖，重新选择自动模式会清除覆盖。
+- manifest 可选的 `titleI18n` 按语言代码提供标签页与启动入口标题；缺少当前语言时使用英语，基础 `title` 仍为必填兼容字段。
 
 存储路径固定为 `data/saves/<id>.json`。`load()` 对不存在、读取失败或 JSON 解析失败统一返回 `null`，并把读取错误写入 console。`save()` 和 `clear()` 在实例内通过 Promise 队列串行执行；首次保存会逐级创建 `data/` 和 `data/saves/`。插件不校验业务数据，也不做 schema 迁移、原子临时文件替换、跨实例锁或冲突合并。
 

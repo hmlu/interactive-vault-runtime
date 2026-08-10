@@ -79,8 +79,8 @@ export function validateProjectManifest(value: unknown): InteractiveProjectManif
   }
   if (
     manifest.titleI18n !== undefined &&
-    (!manifest.titleI18n || typeof manifest.titleI18n !== "object" ||
-      (manifest.titleI18n.en !== undefined && typeof manifest.titleI18n.en !== "string"))
+    (!manifest.titleI18n || typeof manifest.titleI18n !== "object" || Array.isArray(manifest.titleI18n)
+      || Object.values(manifest.titleI18n).some((title) => typeof title !== "string"))
   ) {
     throw new Error("项目 titleI18n 必须是语言标题对象");
   }
@@ -104,7 +104,11 @@ export function validateProjectManifest(value: unknown): InteractiveProjectManif
     schemaVersion: 1,
     id: manifest.id,
     title: manifest.title.trim(),
-    titleI18n: manifest.titleI18n?.en?.trim() ? { en: manifest.titleI18n.en.trim() } : undefined,
+    titleI18n: manifest.titleI18n
+      ? Object.fromEntries(Object.entries(manifest.titleI18n)
+        .map(([language, title]) => [language.toLocaleLowerCase(), title.trim()])
+        .filter(([, title]) => title))
+      : undefined,
     description: manifest.description?.trim(),
     icon: manifest.icon?.trim(),
     entry: manifest.entry,

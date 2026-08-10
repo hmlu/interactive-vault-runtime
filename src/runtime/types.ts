@@ -91,19 +91,20 @@ export interface ProjectContext {
   localization: ProjectLocalization;
 }
 
-export type ProjectLanguage = "zh" | "en";
+export type ProjectLanguage = string;
 
 export interface ProjectLocalization {
   getLanguage(): ProjectLanguage;
-  setLanguage(language: ProjectLanguage): Promise<void>;
-  subscribe(listener: (language: ProjectLanguage) => void): () => void;
+  getLanguageOverride(): ProjectLanguage | null;
+  setLanguage(language: ProjectLanguage | null): Promise<void>;
+  subscribe(listener: (language: ProjectLanguage, override: ProjectLanguage | null) => void): () => void;
 }
 
 export interface InteractiveProjectManifest {
   schemaVersion: 1;
   id: string;
   title: string;
-  titleI18n?: { en?: string };
+  titleI18n?: Record<string, string>;
   description?: string;
   icon?: string;
   entry: string;

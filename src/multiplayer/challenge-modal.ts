@@ -15,7 +15,7 @@ export class MultiplayerChallengeModal extends Modal {
   }
 
   onOpen(): void {
-    const english = this.language === "en";
+    const english = !this.language.toLocaleLowerCase().startsWith("zh");
     this.containerEl.addClass("ogr-multiplayer-challenge-layer");
     this.modalEl.addClass("ogr-multiplayer-challenge-modal");
     this.contentEl.createEl("p", {

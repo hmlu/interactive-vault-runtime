@@ -14,7 +14,7 @@ export class ProjectView extends ItemView {
   private expectedId?: string;
   private projectTitle = "互动应用";
   private projectTitleZh = "互动应用";
-  private projectTitleEn?: string;
+  private projectTitles: Record<string, string> = {};
   private projectIcon = "blocks";
   private unmountProject?: () => void;
   private immersiveEl?: HTMLElement;
@@ -100,20 +100,20 @@ export class ProjectView extends ItemView {
     const host = this.prepareImmersiveHost();
 
     if (!this.manifestPath) {
-      this.showError(this.plugin.getProjectLanguage() === "en" ? "Missing project manifest path" : "缺少项目 manifest 路径");
+      this.showError(this.plugin.isProjectLanguageChinese() ? "缺少项目 manifest 路径" : "Missing project manifest path");
       return;
     }
 
     host.createDiv({
       cls: "ogr-loading",
-      text: this.plugin.getProjectLanguage() === "en" ? "Loading interactive app…" : "正在加载互动应用…",
+      text: this.plugin.isProjectLanguageChinese() ? "正在加载互动应用…" : "Loading interactive app…",
     });
     try {
       const project = await this.plugin.loader.load(this.manifestPath, this.expectedId);
       if (version !== this.renderVersion) return;
 
       this.projectTitleZh = project.manifest.title;
-      this.projectTitleEn = project.manifest.titleI18n?.en;
+      this.projectTitles = project.manifest.titleI18n ?? {};
       this.projectTitle = this.plugin.getProjectTitle(project);
       this.projectIcon = project.manifest.icon || "blocks";
       const projectHost = this.prepareImmersiveHost();
@@ -126,7 +126,7 @@ export class ProjectView extends ItemView {
       if (version !== this.renderVersion) return;
       this.showError(error instanceof Error
         ? error.message
-        : this.plugin.getProjectLanguage() === "en" ? "Could not load the interactive app" : "无法加载互动应用");
+        : this.plugin.isProjectLanguageChinese() ? "无法加载互动应用" : "Could not load the interactive app");
     }
   }
 
@@ -153,26 +153,30 @@ export class ProjectView extends ItemView {
       cls: "ivr-exit-immersive",
       attr: {
         type: "button",
-        "aria-label": this.plugin.getProjectLanguage() === "en" ? "Exit immersive mode" : "退出沉浸模式",
-        title: this.plugin.getProjectLanguage() === "en" ? "Exit immersive mode (Esc)" : "退出沉浸模式（Esc）",
+        "aria-label": this.plugin.isProjectLanguageChinese() ? "退出沉浸模式" : "Exit immersive mode",
+        title: this.plugin.isProjectLanguageChinese() ? "退出沉浸模式（Esc）" : "Exit immersive mode (Esc)",
       },
     });
     const icon = exitButton.createSpan({ cls: "ivr-exit-immersive__icon" });
     setIcon(icon, "minimize-2");
-    exitButton.createSpan({ cls: "ivr-exit-immersive__label", text: this.plugin.getProjectLanguage() === "en" ? "Exit" : "退出沉浸" });
+    exitButton.createSpan({ cls: "ivr-exit-immersive__label", text: this.plugin.isProjectLanguageChinese() ? "退出沉浸" : "Exit" });
     exitButton.addEventListener("click", () => this.exitImmersiveMode());
     return host;
   }
 
   private updateLocalizedChrome(): void {
-    const english = this.plugin.getProjectLanguage() === "en";
-    this.projectTitle = english && this.projectTitleEn ? this.projectTitleEn : this.projectTitleZh;
+    const chinese = this.plugin.isProjectLanguageChinese();
+    const language = this.plugin.getProjectLanguage().toLocaleLowerCase();
+    const baseLanguage = language.split("-")[0];
+    this.projectTitle = chinese
+      ? this.projectTitleZh
+      : this.projectTitles[language] ?? this.projectTitles[baseLanguage] ?? this.projectTitles.en ?? this.projectTitleZh;
     const button = this.immersiveEl?.querySelector<HTMLButtonElement>(".ivr-exit-immersive");
     if (!button) return;
-    button.setAttribute("aria-label", english ? "Exit immersive mode" : "退出沉浸模式");
-    button.title = english ? "Exit immersive mode (Esc)" : "退出沉浸模式（Esc）";
+    button.setAttribute("aria-label", chinese ? "退出沉浸模式" : "Exit immersive mode");
+    button.title = chinese ? "退出沉浸模式（Esc）" : "Exit immersive mode (Esc)";
     const label = button.querySelector<HTMLElement>(".ivr-exit-immersive__label");
-    if (label) label.textContent = english ? "Exit" : "退出沉浸";
+    if (label) label.textContent = chinese ? "退出沉浸" : "Exit";
   }
 
   private installAppSurfaceGuards(host: HTMLElement): void {
