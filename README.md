@@ -56,7 +56,7 @@ mode: view
 ```bash
 npm install
 npm run check
-npm run install:vault -- ../obs-game
+npm run install:vault -- ../vault-arcade
 ```
 
 然后重新加载 Obsidian，并在“设置 → 第三方插件”中启用 `Interactive Vault Runtime`。

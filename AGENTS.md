@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-这是一个桌面端和移动端通用的 Obsidian 插件，只负责运行可信的 Vault 应用包。具体游戏和内容位于同级独立仓库 `../obs-game/`。禁止在插件中添加扫雷或其他应用业务，也禁止从内容仓库引用代码。
+这是一个桌面端和移动端通用的 Obsidian 插件，只负责运行可信的 Vault 应用包。具体游戏和内容位于同级独立仓库 `../vault-arcade/`。禁止在插件中添加扫雷或其他应用业务，也禁止从内容仓库引用代码。
 
 ## 事实来源
 
@@ -39,7 +39,7 @@ npm run check
 安装到测试 Vault：
 
 ```bash
-npm run install:vault -- ../obs-game
+npm run install:vault -- ../vault-arcade
 ```
 
 安装脚本复制 `main.js`、`manifest.json`、`styles.css` 到目标 Vault 的 `.obsidian/plugins/interactive-vault-runtime/`。随后需要在 Obsidian 中重新加载插件。不要提交目标 Vault 内的插件副本。

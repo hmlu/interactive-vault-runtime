@@ -4,7 +4,7 @@
 
 本插件为 Obsidian Vault 中的可信互动应用包提供通用运行层：从 Markdown 找到包、读取和验证入口、挂载嵌入界面或沉浸模式、管理清理生命周期，并提供与业务无关的 JSON 存储和可选局域网联机能力。
 
-插件刻意不负责：游戏规则和状态同步策略、应用依赖管理、应用源码编译、应用商店/注册表、存档结构解释、Vault 文件跨设备同步、业务服务器和不可信代码沙箱。示例内容仓库是同级独立项目 `../obs-game/`。
+插件刻意不负责：游戏规则和状态同步策略、应用依赖管理、应用源码编译、应用商店/注册表、存档结构解释、Vault 文件跨设备同步、业务服务器和不可信代码沙箱。示例内容仓库是同级独立项目 `../vault-arcade/`。
 
 ## 模块地图
 
@@ -105,7 +105,7 @@ Runtime 只管理成员、挑战、对局通道和消息大小，不解释游戏
 
 ```bash
 npm run check
-npm run install:vault -- ../obs-game
+npm run install:vault -- ../vault-arcade
 ```
 
 `check` 依次执行类型检查、Vitest 和生产构建。安装脚本复制 `main.js`、`manifest.json`、`styles.css` 到目标 Vault 的插件目录。
