@@ -122,7 +122,7 @@ manifest 可选提供 `titleI18n: Record<string, string>`；Runtime 优先使用
 
 - `sourcePath` 在 Markdown 嵌入实例中是来源笔记的 Vault 路径；沉浸模式当前不保证提供。
 - `openInView()` 可以从嵌入应用进入同一 manifest 的沉浸模式。
-- 可选的 `openProject()` 可以让目录型应用按 Vault 根路径直接打开另一个应用的沉浸视图；调用方应在能力不存在时回退到普通内部链接。
+- 可选的 `openProject()` 可以让目录型应用打开另一个应用的沉浸视图。以 `./` 或 `../` 开头时相对来源笔记解析，其他路径保持按 Vault 根目录解析；调用方应在能力不存在时回退到普通内部链接。
 - 应用通常在内部把 `storage` 收窄为自己的版本化存档类型，但加载后仍须做运行时校验。
 - `multiplayer` 是可选能力。旧版 Runtime 或不支持联机的平台可以不提供；应用必须先做能力检测。
 - `localization` 提供互动应用共享的语言状态。`getLanguage()` 返回当前生效的 Obsidian 或覆盖语言，`getLanguageOverride()` 返回用户覆盖值；向 `setLanguage()` 传入 `null` 会清除覆盖并重新跟随 Obsidian。Runtime 不限制语言包列表，内容应用负责解析语言代码并设置兜底；订阅函数用于同步已挂载的应用实例。
@@ -137,11 +137,13 @@ manifest 可选提供 `titleI18n: Record<string, string>`；Runtime 优先使用
 
 ## 存储约定
 
-每个 manifest ID 映射到一个 Vault 文件：
+通过包管理器安装的项目由包 ID 和 manifest ID 共同映射到一个 Vault 文件：
 
 ```text
-data/saves/<id>.json
+data/saves/<package-id>/<project-id>.json
 ```
+
+未通过包管理器安装的独立项目使用 `data/saves/standalone/<project-id>.json`。包 ID 和项目 ID 都必须保持稳定；改变任一 ID 都会得到一个新的存档位置。
 
 `save()` 以格式化 JSON 覆盖整个文件，`clear()` 删除它，`load()` 在文件不存在、不可读或不是合法 JSON 时返回 `null`。协议没有局部更新、事务、容量配额、跨挂载锁和跨设备合并。
 

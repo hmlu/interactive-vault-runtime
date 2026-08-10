@@ -4,7 +4,7 @@
 
 本插件为 Obsidian Vault 中的可信互动应用包提供通用运行层：从 Markdown 找到包、读取和验证入口、挂载嵌入界面或沉浸模式、管理清理生命周期，并提供与业务无关的 JSON 存储和可选局域网联机能力。
 
-插件刻意不负责：游戏规则和状态同步策略、应用依赖管理、应用源码编译、应用商店/注册表、存档结构解释、Vault 文件跨设备同步、业务服务器和不可信代码沙箱。示例内容仓库是同级独立项目 `../vault-arcade/`。
+插件刻意不负责：游戏规则和状态同步策略、应用依赖管理、应用源码编译、应用商店/注册表、存档结构解释、Vault 文件跨设备同步、业务服务器和不可信代码沙箱。通用包管理器只处理用户主动提供的本地 `.ivpkg` 或直接 HTTPS URL，不内置发行者、产品和下载来源。
 
 ## 模块地图
 
@@ -16,6 +16,9 @@
 | `src/runtime/project-render-child.ts` | 注入项目样式、创建项目根节点、调用 `mount()`、统一清理 |
 | `src/runtime/project-view.ts` | 保存/恢复沉浸模式状态，提供退出控件并防止异步旧渲染覆盖新状态 |
 | `src/platform/vault-storage.ts` | 将通用存储接口适配到 Obsidian Vault adapter |
+| `src/packages/ivpkg.ts` | 解析 `.ivpkg` ZIP、校验发行清单、路径、大小、哈希和项目引用 |
+| `src/packages/package-manager.ts` | 下载、暂存、安装、更新与回滚通用发行包 |
+| `src/packages/package-ui.ts` | 本地/URL 安装入口、确认界面和已安装包列表 |
 | `src/multiplayer/multiplayer-service.ts` | 插件级联机小队、WebRTC 连接、挑战与对局通道 |
 | `src/multiplayer/local-signaling-server.ts` | 桌面房主临时局域网 HTTP 信令端点 |
 | `src/multiplayer/protocol.ts` | 邀请、信令与跨设备消息校验 |
@@ -24,11 +27,12 @@
 
 ## 启动与注册
 
-`InteractiveVaultRuntimePlugin.onload()` 完成三项注册：
+`InteractiveVaultRuntimePlugin.onload()` 完成以下注册：
 
 1. 创建单个 `VaultProjectLoader`。
 2. 注册 `interactive-vault-project` ItemView。
 3. 为语言名 `interactive-vault` 注册 Markdown 代码块处理器。
+4. 注册通用 `.ivpkg` 设置页以及本地文件、远程 URL 两个安装命令。
 
 卸载插件时，所有该类型的沉浸模式都会被关闭。Markdown 嵌入实例由 Obsidian 的 `MarkdownRenderChild` 生命周期管理。
 
@@ -72,6 +76,14 @@ Markdown code block
 
 路径限制用于防止配置错误跨出应用包，但不是安全沙箱。bundle 在插件上下文执行，可以获得与插件相当的 JavaScript 权限，因此只能加载用户信任的 Vault 内容。详细协议见 [应用包协议](application-package-protocol.md)。
 
+## `.ivpkg` 包管理
+
+`.ivpkg` 是 ZIP 发行容器，和单个项目的 `project.json` 协议分层：发行包负责把一个或多个项目及入口笔记安装进 Vault，项目 manifest 继续只负责运行加载。Runtime 不实现软件源，也不识别任何具体产品。
+
+读取器严格校验 `iv-package.json`、归档路径、文件集合、大小和 SHA-256，并确认每个项目 manifest 的 ID、入口与样式都存在。安装器只接受当前 Vault 内的专用目标目录，先把内容写入同级暂存目录；更新时把旧目录改名为备份，再把暂存目录切换到正式路径，失败则恢复旧目录，成功后把旧目录移入 Vault 回收站。首次安装不会覆盖未受 Runtime 管理的已有目录。
+
+远程下载仅接受 HTTPS 并使用 Obsidian `requestUrl`，因此兼容桌面和移动端。schema v1 的 SHA-256 提供内容完整性但不提供发布者认证；包内 JavaScript 仍是可信代码边界。完整格式见 [`.ivpkg` 发行包格式](interactive-package-format.md)。
+
 ## 挂载与样式生命周期
 
 `mountProject()` 把每份 CSS 放入宿主容器内的 `<style>`，再创建 `.ivr-project-root`，最后调用应用 `mount()`。CSS 不是 Shadow DOM 隔离：应用应使用项目级类名前缀，并可消费插件在宿主定义的 `--ogr-*` 主题变量。
@@ -85,13 +97,13 @@ Markdown code block
 - `displayMode` 反映当前是嵌入还是沉浸模式；为兼容协议，沉浸模式仍使用值 `view`。
 - `sourcePath` 只在 Markdown 嵌入路径传入；沉浸模式当前为 `undefined`。
 - `openInView()` 捕获当前 manifest 路径与 ID，并进入新的沉浸模式。
-- 可选 `openProject()` 让目录型应用校验并打开另一个 manifest 的沉浸视图；旧 Runtime 下应用应回退到普通内部链接。
-- `storage` 是按 manifest ID 创建的 `VaultProjectStorage`。
+- 可选 `openProject()` 让目录型应用校验并打开另一个 manifest 的沉浸视图；相对引用优先以来源笔记为基准，没有来源笔记时以当前项目 manifest 为基准，Vault 根路径写法保持兼容；旧 Runtime 下应用应回退到普通内部链接。
+- `storage` 是按包 ID 与 manifest ID 创建的 `VaultProjectStorage`；Runtime 根据项目 manifest 是否属于已安装包的文件清单识别包 ID，其他项目使用 `standalone` 命名空间。
 - `multiplayer` 是按 manifest ID 隔离的可选联机门面；底层 `MultiplayerService` 属于插件生命周期，应用卸载只取消订阅，不会自动退出联机小队。
 - `localization` 分别暴露当前生效语言与可空的用户覆盖值；默认跟随 Obsidian，用户选择具体语言后才持久化覆盖，重新选择自动模式会清除覆盖。
 - manifest 可选的 `titleI18n` 按语言代码提供标签页与启动入口标题；缺少当前语言时使用英语，基础 `title` 仍为必填兼容字段。
 
-存储路径固定为 `data/saves/<id>.json`。`load()` 对不存在、读取失败或 JSON 解析失败统一返回 `null`，并把读取错误写入 console。`save()` 和 `clear()` 在实例内通过 Promise 队列串行执行；首次保存会逐级创建 `data/` 和 `data/saves/`。插件不校验业务数据，也不做 schema 迁移、原子临时文件替换、跨实例锁或冲突合并。
+存储路径固定为 `data/saves/<package-id>/<project-id>.json`，独立项目使用 `standalone` 作为包 ID。`load()` 对不存在、读取失败或 JSON 解析失败统一返回 `null`，并把读取错误写入 console。`save()` 和 `clear()` 在实例内通过 Promise 队列串行执行；首次保存会逐级创建 `data/`、`data/saves/` 和包目录。插件不校验业务数据，也不做 schema 迁移、原子临时文件替换、跨实例锁或冲突合并。
 
 这意味着同一应用的多个挂载实例共享文件但不共享写队列。应用应减少无意义写入，自己版本化/校验存档，并谨慎处理多窗口或多设备并发。
 
@@ -107,7 +119,7 @@ Runtime 只管理成员、挑战、对局通道和消息大小，不解释游戏
 
 ```bash
 npm run check
-npm run install:vault -- ../vault-arcade
+npm run install:vault -- /path/to/test-vault
 ```
 
 `check` 依次执行类型检查、Vitest 和生产构建。安装脚本复制 `main.js`、`manifest.json`、`styles.css` 到目标 Vault 的插件目录。
@@ -122,3 +134,4 @@ GitHub Actions 在推送版本标签时再次运行 `check`，验证标签与 `m
 - 生命周期变化：复查嵌入卸载、标签页恢复、快速重渲染与插件卸载。
 - 存储变化：复查写入排序、失败后的队列行为、多实例并发和移动端 adapter。
 - 样式变化：在桌面/移动、深色/浅色、嵌入/沉浸模式中手工检查，并确认退出后 Obsidian 界面恢复。
+- `.ivpkg` 变化：复查 ZIP 路径逃逸、压缩炸弹限制、清单哈希、暂存回滚、已有目录保护和桌面/移动文件选择。

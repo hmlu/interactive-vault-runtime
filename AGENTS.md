@@ -2,7 +2,7 @@
 
 ## 项目定位
 
-这是一个桌面端和移动端通用的 Obsidian 插件，只负责运行可信的 Vault 应用包。具体游戏和内容位于同级独立仓库 `../vault-arcade/`。禁止在插件中添加扫雷或其他应用业务，也禁止从内容仓库引用代码。
+这是一个桌面端和移动端通用的 Obsidian 插件，只负责安装和运行可信的 Vault 应用包。具体游戏和内容位于独立内容仓库。禁止在插件中添加具体应用业务，也禁止从内容仓库引用代码、下载地址或产品元数据。
 
 ## 事实来源
 
@@ -22,9 +22,11 @@
 - 只接受 `schemaVersion: 1`，入口是项目目录内 `.js` CommonJS bundle，样式是项目目录内 `.css` 文件。
 - bundle 必须导出 `mount(container, context)`，可以返回同步清理函数。
 - `ProjectContext` 当前只有 `displayMode`、可选 `sourcePath`、`storage`、`openInView()`。
-- 存档固定写入 `data/saves/<manifest.id>.json`。插件不解释、不迁移应用数据。
+- 已安装应用包的存档固定写入 `data/saves/<package-id>/<project-id>.json`，独立开发项目使用 `data/saves/standalone/<project-id>.json`。插件不解释、不迁移应用数据。
 - 应用代码通过 `new Function` 以插件权限执行，不是安全沙箱。不要把“路径限制”描述为对恶意 bundle 的隔离。
 - Markdown 代码块语言名称只有 `interactive-vault`，目前没有兼容别名。
+- `.ivpkg` 是根部包含 `iv-package.json` 和 `content/` 的 ZIP 发行容器；包管理器只接受用户主动选择的本地文件或直接 HTTPS URL。
+- 包管理器必须保持中立：不内置软件源、发行者、产品 ID、下载地址、业务分类或具体应用迁移逻辑。
 
 公共协议变化时，要同步检查同级内容仓库的 `games/shared/runtime.ts`、应用实现和两边文档。除非明确设计并迁移 schema，否则不要悄悄改变已发布 v1 行为。
 
@@ -39,7 +41,7 @@ npm run check
 安装到测试 Vault：
 
 ```bash
-npm run install:vault -- ../vault-arcade
+npm run install:vault -- /path/to/test-vault
 ```
 
 安装脚本复制 `main.js`、`manifest.json`、`styles.css` 到目标 Vault 的 `.obsidian/plugins/interactive-vault-runtime/`。随后需要在 Obsidian 中重新加载插件。不要提交目标 Vault 内的插件副本。

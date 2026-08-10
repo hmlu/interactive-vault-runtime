@@ -1,9 +1,10 @@
 # Interactive Vault Runtime
 
-一个面向 Obsidian 桌面端和移动端的通用互动应用运行插件。插件本身不内置游戏或业务应用，只负责从 Vault 加载可信的应用包、挂载界面、管理沉浸模式，并提供存档与可选的局域网联机能力。
+一个面向 Obsidian 桌面端和移动端的通用互动应用运行插件。插件本身不内置游戏或业务应用，只负责安装和加载可信的应用包、挂载界面、管理沉浸模式，并提供存档与可选的局域网联机能力。
 
 - [互动应用开发指南](docs/application-development-guide.md)：从零创建、构建、调试和分发应用
 - [应用包协议 v1](docs/application-package-protocol.md)：manifest、入口、Context 与兼容性参考
+- [`.ivpkg` 发行包格式 v1](docs/interactive-package-format.md)：本地/URL 安装、归档清单与完整性校验
 - [架构与源码导览](docs/architecture.md)
 - [局域网联机架构](docs/local-multiplayer.md)
 
@@ -49,14 +50,20 @@ mode: view
 
 应用包中的 JavaScript 会以插件权限运行，只应加载自己信任的内容。
 
-存档按 manifest ID 写入 Vault 的 `data/saves/<id>.json`。应用负责自己的数据格式、版本和迁移，插件只提供 JSON 整体读写。
+通过包管理器安装的应用按包 ID 和 manifest ID 写入 Vault 的 `data/saves/<package-id>/<project-id>.json`；独立项目写入 `data/saves/standalone/<project-id>.json`。应用负责自己的数据格式、版本和迁移，插件只提供 JSON 整体读写。
+
+## 安装互动应用包
+
+`.ivpkg` 是包含一个或多个互动项目的 ZIP 发行包。Runtime 的插件设置和命令面板支持从本地文件或直接 HTTPS URL 安装；安装前会验证清单、文件大小和 SHA-256，并让用户选择当前 Vault 内的专用目标目录。Runtime 不内置软件源或具体产品地址。
+
+详细结构和安全边界见 [`.ivpkg` 发行包格式 v1](docs/interactive-package-format.md)。
 
 ## 开发与本地安装
 
 ```bash
 npm install
 npm run check
-npm run install:vault -- ../vault-arcade
+npm run install:vault -- /path/to/test-vault
 ```
 
 然后重新加载 Obsidian，并在“设置 → 第三方插件”中启用 `Interactive Vault Runtime`。

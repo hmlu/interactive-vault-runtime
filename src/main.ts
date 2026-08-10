@@ -1,6 +1,20 @@
 import { getLanguage, Notice, Plugin, type MarkdownPostProcessorContext } from "obsidian";
 import { MultiplayerChallengeModal } from "./multiplayer/challenge-modal";
 import { MultiplayerService } from "./multiplayer/multiplayer-service";
+import {
+  InteractivePackageManager,
+  readInstalledPackageRecords,
+  type InstalledPackageRecord,
+} from "./packages/package-manager";
+import {
+  findInstalledPackageIdForProject,
+  STANDALONE_PACKAGE_ID,
+} from "./packages/package-identity";
+import {
+  chooseLocalPackage,
+  InteractivePackageSettingTab,
+  openRemotePackageInstaller,
+} from "./packages/package-ui";
 import { VaultProjectStorage } from "./platform/vault-storage";
 import { parseProjectDirective } from "./runtime/directive";
 import { VaultProjectLoader } from "./runtime/project-loader";
@@ -15,26 +29,47 @@ import type {
 
 interface RuntimeSettings {
   localeOverride?: ProjectLanguage | null;
+  installedPackages?: InstalledPackageRecord[];
 }
 
 export default class InteractiveVaultRuntimePlugin extends Plugin {
   loader!: VaultProjectLoader;
   multiplayer!: MultiplayerService;
+  packageManager!: InteractivePackageManager;
   private activeChallengeId: string | null = null;
   private languageOverride: ProjectLanguage | null = null;
+  private runtimeSettings: RuntimeSettings = {};
   private readonly languageListeners = new Set<(
     language: ProjectLanguage,
     override: ProjectLanguage | null,
   ) => void>();
 
   async onload(): Promise<void> {
-    const settings = await this.loadData() as RuntimeSettings | null;
-    this.languageOverride = typeof settings?.localeOverride === "string" && settings.localeOverride.trim()
-      ? settings.localeOverride.trim()
+    const loadedSettings = await this.loadData() as RuntimeSettings | null;
+    this.runtimeSettings = {
+      localeOverride: typeof loadedSettings?.localeOverride === "string" && loadedSettings.localeOverride.trim()
+        ? loadedSettings.localeOverride.trim()
+        : null,
+      installedPackages: readInstalledPackageRecords(loadedSettings?.installedPackages),
+    };
+    this.languageOverride = typeof this.runtimeSettings.localeOverride === "string" && this.runtimeSettings.localeOverride.trim()
+      ? this.runtimeSettings.localeOverride.trim()
       : null;
     this.loader = new VaultProjectLoader(this.app);
     this.multiplayer = new MultiplayerService();
+    this.packageManager = new InteractivePackageManager(this.app);
     this.register(this.multiplayer.subscribe(() => this.presentIncomingChallenge()));
+    this.addSettingTab(new InteractivePackageSettingTab(this.app, this));
+    this.addCommand({
+      id: "install-local-interactive-package",
+      name: "Install local interactive package",
+      callback: () => chooseLocalPackage(this),
+    });
+    this.addCommand({
+      id: "install-interactive-package-from-url",
+      name: "Install interactive package from URL",
+      callback: () => openRemotePackageInstaller(this),
+    });
 
     this.registerView(
       PROJECT_VIEW_TYPE,
@@ -58,12 +93,23 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
     displayMode: DisplayMode,
     sourcePath?: string,
   ): ProjectContext {
+    const packageId = findInstalledPackageIdForProject(
+      project.manifestPath,
+      this.getInstalledPackages(),
+    ) ?? STANDALONE_PACKAGE_ID;
+
     return {
       displayMode,
       sourcePath,
-      storage: new VaultProjectStorage(this.app, project.manifest.id),
+      storage: new VaultProjectStorage(this.app, packageId, project.manifest.id),
       openInView: () => this.openProject(project.manifestPath, project.manifest.id),
-      openProject: (manifestPath, expectedId) => this.openProject(manifestPath, expectedId),
+      openProject: (manifestPath, expectedId) => this.openProject(
+        this.loader.resolveManifestPath(
+          { manifest: manifestPath },
+          sourcePath ?? project.manifestPath,
+        ),
+        expectedId,
+      ),
       multiplayer: this.multiplayer.createProjectFacade(project),
       localization: {
         getLanguage: () => this.getProjectLanguage(),
@@ -84,6 +130,19 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
 
   getProjectLanguageOverride(): ProjectLanguage | null {
     return this.languageOverride;
+  }
+
+  getInstalledPackages(): readonly InstalledPackageRecord[] {
+    return this.runtimeSettings.installedPackages ?? [];
+  }
+
+  async saveInstalledPackage(record: InstalledPackageRecord): Promise<void> {
+    const packages = [...this.getInstalledPackages()];
+    const existingIndex = packages.findIndex((candidate) => candidate.id === record.id);
+    if (existingIndex >= 0) packages[existingIndex] = record;
+    else packages.push(record);
+    this.runtimeSettings.installedPackages = packages;
+    await this.saveData(this.runtimeSettings);
   }
 
   isProjectLanguageChinese(): boolean {
@@ -109,9 +168,10 @@ export default class InteractiveVaultRuntimePlugin extends Plugin {
     const nextOverride = typeof language === "string" && language.trim() ? language.trim() : null;
     if (this.languageOverride === nextOverride) return;
     this.languageOverride = nextOverride;
+    this.runtimeSettings.localeOverride = nextOverride;
     const effectiveLanguage = this.getProjectLanguage();
     for (const listener of this.languageListeners) listener(effectiveLanguage, nextOverride);
-    await this.saveData(nextOverride ? { localeOverride: nextOverride } : {} satisfies RuntimeSettings);
+    await this.saveData(this.runtimeSettings);
   }
 
   private presentIncomingChallenge(): void {

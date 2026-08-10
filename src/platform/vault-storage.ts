@@ -1,15 +1,23 @@
 import { normalizePath, type App } from "obsidian";
 import type { ProjectStorage } from "../runtime/types";
 
+const STORAGE_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)*$/;
+
 export class VaultProjectStorage<T> implements ProjectStorage<T> {
+  private readonly directory: string;
   private readonly path: string;
   private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly app: App,
+    packageId: string,
     projectId: string,
   ) {
-    this.path = normalizePath(`data/saves/${projectId}.json`);
+    if (!STORAGE_ID_PATTERN.test(packageId) || !STORAGE_ID_PATTERN.test(projectId)) {
+      throw new Error("Package and project ids must be safe storage identifiers");
+    }
+    this.directory = normalizePath(`data/saves/${packageId}`);
+    this.path = normalizePath(`${this.directory}/${projectId}.json`);
   }
 
   async load(): Promise<T | null> {
@@ -42,7 +50,7 @@ export class VaultProjectStorage<T> implements ProjectStorage<T> {
   }
 
   private async ensureSaveDirectory(): Promise<void> {
-    for (const directory of ["data", "data/saves"]) {
+    for (const directory of ["data", "data/saves", this.directory]) {
       const path = normalizePath(directory);
       if (!(await this.app.vault.adapter.exists(path))) {
         await this.app.vault.adapter.mkdir(path);

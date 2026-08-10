@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateProjectManifest } from "../src/runtime/project-loader";
+import { resolveManifestReference, validateProjectManifest } from "../src/runtime/project-loader";
 
 describe("project manifest localization", () => {
   it("keeps normalized titles for every declared language", () => {
@@ -22,5 +22,17 @@ describe("project manifest localization", () => {
       titleI18n: { en: 42 },
       entry: "dist/main.js",
     })).toThrow("titleI18n");
+  });
+});
+
+describe("project manifest references", () => {
+  it("keeps Vault-root references backward compatible", () => {
+    expect(resolveManifestReference("apps/sample/project.json", "Packs/demo/index.md"))
+      .toBe("apps/sample/project.json");
+  });
+
+  it("resolves relative references from the source note", () => {
+    expect(resolveManifestReference("./apps/sample/project.json", "Packs/demo/index.md"))
+      .toBe("Packs/demo/apps/sample/project.json");
   });
 });

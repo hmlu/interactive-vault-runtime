@@ -153,11 +153,13 @@ export interface ProjectContext {
 }
 ```
 
-`id` 必须由小写字母、数字和连字符组成，并且应在整个 Vault 内保持唯一和稳定。它同时决定存档路径：
+`id` 必须由小写字母、数字和连字符组成，并且应在所属应用包内保持唯一和稳定。通过包管理器安装后，它与包 ID 共同决定存档路径：
 
 ```text
-data/saves/counter.json
+data/saves/<package-id>/counter.json
 ```
+
+未通过包管理器安装的开发项目使用 `data/saves/standalone/counter.json`。
 
 `entry` 和 `styles` 都相对 `project.json` 所在目录解析，而且不能逃出该目录。CSS 可以像示例一样直接使用源码文件，也可以在构建时复制到 `dist/` 后修改 manifest 路径。
 
@@ -400,7 +402,7 @@ interface ProjectStorage<T> {
 }
 ```
 
-- `load()`：读取 `data/saves/<manifest.id>.json`；文件不存在、不可读或 JSON 无效时返回 `null`。
+- `load()`：读取 `data/saves/<package-id>/<manifest.id>.json`；未安装的独立项目使用 `standalone` 作为包 ID。文件不存在、不可读或 JSON 无效时返回 `null`。
 - `save(value)`：把整个值格式化为 JSON 并覆盖存档文件。
 - `clear()`：删除对应存档文件；文件不存在时也正常完成。
 
@@ -416,7 +418,7 @@ interface ProjectStorage<T> {
 
 ### openProject()
 
-可选能力，用于游戏大厅等目录型应用直接打开另一个 manifest 的沉浸视图。`manifestPath` 使用 Vault 根路径，`expectedId` 用于防止路径指向了意外的应用。旧版 Runtime 可能不提供此方法，调用方必须保留普通内部链接作为回退。
+可选能力，用于目录型应用直接打开另一个 manifest 的沉浸视图。`manifestPath` 以 `./` 或 `../` 开头时相对来源笔记解析，其他路径使用 Vault 根路径；`expectedId` 用于防止路径指向了意外的应用。旧版 Runtime 可能不提供此方法，调用方必须保留普通内部链接作为回退。
 
 沉浸视图会作为 App 交互表面运行：默认禁止文本选择、长按菜单、拖拽和非输入区域的编辑事件。`input`、`textarea`、`select` 与显式的 `[contenteditable="true"]` 会自动放行；自定义控件可使用 `.ivr-allow-select`、`.ivr-allow-text-input`、`.ivr-allow-context-menu` 或 `.ivr-allow-drag` 选择性恢复能力。
 
@@ -446,7 +448,7 @@ cleanup 应同步释放所有由本次挂载创建的资源，包括：
 | 字段 | 必需 | 说明 |
 | --- | --- | --- |
 | `schemaVersion` | 是 | 当前只能是数字 `1` |
-| `id` | 是 | 小写字母、数字和连字符；也是存档文件名 |
+| `id` | 是 | 小写字母、数字和连字符；与包 ID 共同组成存档路径 |
 | `title` | 是 | 非空标题，用于按钮和标签页 |
 | `entry` | 是 | 包目录内相对 `.js` 路径 |
 | `styles` | 否 | 包目录内相对 `.css` 路径数组 |

@@ -13,14 +13,7 @@ export class VaultProjectLoader {
 
   resolveManifestPath(directive: ProjectDirective, sourcePath?: string): string {
     if (directive.manifest) {
-      const manifest = directive.manifest.trim();
-      if (manifest.startsWith("./") || manifest.startsWith("../")) {
-        if (!sourcePath) {
-          throw new Error("相对 manifest 路径需要来源笔记");
-        }
-        return normalizePath(joinVaultPath(vaultDirname(sourcePath), manifest));
-      }
-      return normalizePath(manifest);
+      return resolveManifestReference(directive.manifest, sourcePath);
     }
 
     if (!sourcePath) {
@@ -60,6 +53,15 @@ export class VaultProjectLoader {
     }
     return this.app.vault.adapter.read(path);
   }
+}
+
+export function resolveManifestReference(reference: string, sourcePath?: string): string {
+  const manifest = reference.trim();
+  if (manifest.startsWith("./") || manifest.startsWith("../")) {
+    if (!sourcePath) throw new Error("相对 manifest 路径需要来源笔记或项目路径");
+    return normalizePath(joinVaultPath(vaultDirname(sourcePath), manifest));
+  }
+  return normalizePath(manifest);
 }
 
 export function validateProjectManifest(value: unknown): InteractiveProjectManifest {
