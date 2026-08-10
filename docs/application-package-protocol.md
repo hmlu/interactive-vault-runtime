@@ -109,14 +109,22 @@ interface ProjectContext {
   openInView(): Promise<void>;
   openProject?(manifestPath: string, expectedId?: string): Promise<void>;
   multiplayer?: ProjectMultiplayer;
+  localization: {
+    getLanguage(): "zh" | "en";
+    setLanguage(language: "zh" | "en"): Promise<void>;
+    subscribe(listener: (language: "zh" | "en") => void): () => void;
+  };
 }
 ```
+
+manifest 可选提供 `titleI18n: { en?: string }`；Runtime 在英语模式下用它显示标签页和启动入口标题，未提供时继续使用 `title`。
 
 - `sourcePath` 在 Markdown 嵌入实例中是来源笔记的 Vault 路径；沉浸模式当前不保证提供。
 - `openInView()` 可以从嵌入应用进入同一 manifest 的沉浸模式。
 - 可选的 `openProject()` 可以让目录型应用按 Vault 根路径直接打开另一个应用的沉浸视图；调用方应在能力不存在时回退到普通内部链接。
 - 应用通常在内部把 `storage` 收窄为自己的版本化存档类型，但加载后仍须做运行时校验。
 - `multiplayer` 是可选能力。旧版 Runtime 或不支持联机的平台可以不提供；应用必须先做能力检测。
+- `localization` 提供互动应用共享的中英文偏好。没有用户覆盖值时按 Obsidian 当前语言选择，非中文语言统一使用英语；订阅函数用于同步已挂载的应用实例。
 
 ### ProjectMultiplayer
 

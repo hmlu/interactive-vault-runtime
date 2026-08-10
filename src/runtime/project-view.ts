@@ -13,6 +13,8 @@ export class ProjectView extends ItemView {
   private manifestPath?: string;
   private expectedId?: string;
   private projectTitle = "互动应用";
+  private projectTitleZh = "互动应用";
+  private projectTitleEn?: string;
   private projectIcon = "blocks";
   private unmountProject?: () => void;
   private immersiveEl?: HTMLElement;
@@ -48,6 +50,7 @@ export class ProjectView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    this.register(this.plugin.subscribeProjectLanguage(() => this.updateLocalizedChrome()));
     this.registerDomEvent(
       this.contentEl.ownerDocument,
       "keydown",
@@ -97,16 +100,21 @@ export class ProjectView extends ItemView {
     const host = this.prepareImmersiveHost();
 
     if (!this.manifestPath) {
-      this.showError("缺少项目 manifest 路径");
+      this.showError(this.plugin.getProjectLanguage() === "en" ? "Missing project manifest path" : "缺少项目 manifest 路径");
       return;
     }
 
-    host.createDiv({ cls: "ogr-loading", text: "正在加载互动应用…" });
+    host.createDiv({
+      cls: "ogr-loading",
+      text: this.plugin.getProjectLanguage() === "en" ? "Loading interactive app…" : "正在加载互动应用…",
+    });
     try {
       const project = await this.plugin.loader.load(this.manifestPath, this.expectedId);
       if (version !== this.renderVersion) return;
 
-      this.projectTitle = project.manifest.title;
+      this.projectTitleZh = project.manifest.title;
+      this.projectTitleEn = project.manifest.titleI18n?.en;
+      this.projectTitle = this.plugin.getProjectTitle(project);
       this.projectIcon = project.manifest.icon || "blocks";
       const projectHost = this.prepareImmersiveHost();
       this.unmountProject = mountProject(
@@ -116,7 +124,9 @@ export class ProjectView extends ItemView {
       );
     } catch (error) {
       if (version !== this.renderVersion) return;
-      this.showError(error instanceof Error ? error.message : "无法加载互动应用");
+      this.showError(error instanceof Error
+        ? error.message
+        : this.plugin.getProjectLanguage() === "en" ? "Could not load the interactive app" : "无法加载互动应用");
     }
   }
 
@@ -143,15 +153,26 @@ export class ProjectView extends ItemView {
       cls: "ivr-exit-immersive",
       attr: {
         type: "button",
-        "aria-label": "退出沉浸模式",
-        title: "退出沉浸模式（Esc）",
+        "aria-label": this.plugin.getProjectLanguage() === "en" ? "Exit immersive mode" : "退出沉浸模式",
+        title: this.plugin.getProjectLanguage() === "en" ? "Exit immersive mode (Esc)" : "退出沉浸模式（Esc）",
       },
     });
     const icon = exitButton.createSpan({ cls: "ivr-exit-immersive__icon" });
     setIcon(icon, "minimize-2");
-    exitButton.createSpan({ text: "退出沉浸" });
+    exitButton.createSpan({ cls: "ivr-exit-immersive__label", text: this.plugin.getProjectLanguage() === "en" ? "Exit" : "退出沉浸" });
     exitButton.addEventListener("click", () => this.exitImmersiveMode());
     return host;
+  }
+
+  private updateLocalizedChrome(): void {
+    const english = this.plugin.getProjectLanguage() === "en";
+    this.projectTitle = english && this.projectTitleEn ? this.projectTitleEn : this.projectTitleZh;
+    const button = this.immersiveEl?.querySelector<HTMLButtonElement>(".ivr-exit-immersive");
+    if (!button) return;
+    button.setAttribute("aria-label", english ? "Exit immersive mode" : "退出沉浸模式");
+    button.title = english ? "Exit immersive mode (Esc)" : "退出沉浸模式（Esc）";
+    const label = button.querySelector<HTMLElement>(".ivr-exit-immersive__label");
+    if (label) label.textContent = english ? "Exit" : "退出沉浸";
   }
 
   private installAppSurfaceGuards(host: HTMLElement): void {

@@ -77,6 +77,13 @@ export function validateProjectManifest(value: unknown): InteractiveProjectManif
   if (typeof manifest.title !== "string" || !manifest.title.trim()) {
     throw new Error("项目 manifest 缺少 title");
   }
+  if (
+    manifest.titleI18n !== undefined &&
+    (!manifest.titleI18n || typeof manifest.titleI18n !== "object" ||
+      (manifest.titleI18n.en !== undefined && typeof manifest.titleI18n.en !== "string"))
+  ) {
+    throw new Error("项目 titleI18n 必须是语言标题对象");
+  }
   if (typeof manifest.entry !== "string" || !manifest.entry.trim()) {
     throw new Error("项目 manifest 缺少 entry");
   }
@@ -97,6 +104,7 @@ export function validateProjectManifest(value: unknown): InteractiveProjectManif
     schemaVersion: 1,
     id: manifest.id,
     title: manifest.title.trim(),
+    titleI18n: manifest.titleI18n?.en?.trim() ? { en: manifest.titleI18n.en.trim() } : undefined,
     description: manifest.description?.trim(),
     icon: manifest.icon?.trim(),
     entry: manifest.entry,

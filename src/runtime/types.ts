@@ -88,12 +88,22 @@ export interface ProjectContext {
   openInView(): Promise<void>;
   openProject?(manifestPath: string, expectedId?: string): Promise<void>;
   multiplayer?: ProjectMultiplayer;
+  localization: ProjectLocalization;
+}
+
+export type ProjectLanguage = "zh" | "en";
+
+export interface ProjectLocalization {
+  getLanguage(): ProjectLanguage;
+  setLanguage(language: ProjectLanguage): Promise<void>;
+  subscribe(listener: (language: ProjectLanguage) => void): () => void;
 }
 
 export interface InteractiveProjectManifest {
   schemaVersion: 1;
   id: string;
   title: string;
+  titleI18n?: { en?: string };
   description?: string;
   icon?: string;
   entry: string;
