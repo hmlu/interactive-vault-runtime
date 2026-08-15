@@ -131,7 +131,7 @@ manifest 可选提供 `titleI18n: Record<string, string>`；Runtime 优先使用
 
 联机能力分为持续存在的“联机小队”和只属于当前项目的“对局”。`createParty()`、`joinParty()`、可选的 `inviteMore()`、审批与退出用于首页等大厅应用；游戏通常只订阅快照、向在线成员发起 `challenge()`，并在对局建立后使用 `send()`/`onMessage()`。手机房主完成一次双扫后可以调用 `inviteMore()` 生成下一台设备专用的邀请；移动端每次只处理一台待配对设备。
 
-`subscribe()` 和 `onMessage()` 返回的清理函数必须在应用卸载时调用。调用清理函数不会断开小队；只有 `leaveParty()` 或插件卸载才关闭连接。游戏 payload 必须是 JSON 值，并应自行做版本化和运行时校验。高频实时游戏可读取可选的 `getBufferedAmount()`；当可靠通道已经积压数据时，应跳过可被后续状态替代的旧快照，避免延迟持续增长。
+`subscribe()` 和 `onMessage()` 返回的清理函数必须在应用卸载时调用。调用清理函数不会断开小队；只有 `leaveParty()` 或插件卸载才关闭连接。游戏 payload 必须是 JSON 值，并应自行做版本化和运行时校验。必须抵达的指令使用 `send()`；可被新状态替代的高频快照优先使用可选的 `sendRealtime()`，它通过无序、不过期重传的通道避免队头阻塞。应用可配合 `getBufferedAmount()` 和 `getRealtimeBufferedAmount()` 检测积压并跳过旧快照；旧版 Runtime 不提供实时通道时，应用应回退到 `send()`。
 
 桌面端可以创建小队，手机扫描一次即可申请加入。移动端也可以创建手机小队：加入者扫描房主邀请码并展示回传码，房主再扫描回传码完成许可和连接。连接建立后使用 WebRTC DataChannel；房主可以逐台邀请更多设备，切换笔记或游戏不会中断小队。
 

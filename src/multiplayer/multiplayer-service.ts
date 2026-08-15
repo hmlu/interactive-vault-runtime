@@ -34,6 +34,7 @@ interface PeerConnectionRecord {
   member: MultiplayerMember;
   connection: RTCPeerConnection;
   channel: RTCDataChannel | null;
+  realtimeChannel?: RTCDataChannel | null;
 }
 
 interface GuestSignalSession {
@@ -50,6 +51,7 @@ interface QrHostSession {
   expiresAt: number;
   connection: RTCPeerConnection;
   channel: RTCDataChannel;
+  realtimeChannel: RTCDataChannel;
   connectionTimeout?: ReturnType<typeof globalThis.setTimeout>;
 }
 
@@ -108,7 +110,9 @@ export class MultiplayerService {
       leaveParty: () => this.leaveParty(),
       challenge: (memberId, options) => this.challenge(project, memberId, options),
       send: (payload) => this.sendGameMessage(projectId, payload),
+      sendRealtime: (payload) => this.sendRealtimeGameMessage(projectId, payload),
       getBufferedAmount: () => this.getGameBufferedAmount(projectId),
+      getRealtimeBufferedAmount: () => this.getRealtimeGameBufferedAmount(projectId),
       onMessage: (listener) => this.onProjectMessage(projectId, listener),
       endMatch: () => this.endMatch(projectId),
     };
@@ -284,6 +288,7 @@ export class MultiplayerService {
     const expiresAt = Date.now() + 10 * 60_000;
     const connection = new RTCPeerConnection({ iceServers: [] });
     const channel = connection.createDataChannel("interactive-vault", { ordered: true });
+    const realtimeChannel = connection.createDataChannel("interactive-vault-realtime", { ordered: false, maxRetransmits: 0 });
     try {
       await connection.setLocalDescription(await connection.createOffer());
       await waitForIceGathering(connection, 12_000);
@@ -292,7 +297,7 @@ export class MultiplayerService {
       }
       const sdp = connection.localDescription?.sdp;
       if (!sdp || !hasIceCandidate(sdp)) throw new Error("没有获取到可用的局域网连接地址，请保持 Wi-Fi 开启后重试");
-      this.qrHostSession = { partyId, token, hostId: localMember.id, expiresAt, connection, channel };
+      this.qrHostSession = { partyId, token, hostId: localMember.id, expiresAt, connection, channel, realtimeChannel };
       this.party = {
         ...this.party,
         pairingStatus: "awaiting-scan",
@@ -302,6 +307,7 @@ export class MultiplayerService {
       this.notify();
     } catch (error) {
       channel.close();
+      realtimeChannel.close();
       connection.close();
       throw error;
     } finally {
@@ -326,8 +332,13 @@ export class MultiplayerService {
     };
     this.notify();
     connection.ondatachannel = (event) => {
-      record.channel = event.channel;
-      this.bindGuestChannel(record, event.channel);
+      if (event.channel.label === "interactive-vault-realtime") {
+        record.realtimeChannel = event.channel;
+        this.bindRealtimeChannel(record, event.channel);
+      } else {
+        record.channel = event.channel;
+        this.bindGuestChannel(record, event.channel);
+      }
     };
     connection.onconnectionstatechange = () => {
       if (["failed", "closed", "disconnected"].includes(connection.connectionState)) {
@@ -373,7 +384,12 @@ export class MultiplayerService {
       throw new Error("回传码不属于当前手机小队");
     }
     if (this.hostPeers.has(invite.guest.id)) throw new Error("这台设备已经加入当前小队");
-    const record: PeerConnectionRecord = { member: invite.guest, connection: session.connection, channel: session.channel };
+    const record: PeerConnectionRecord = {
+      member: invite.guest,
+      connection: session.connection,
+      channel: session.channel,
+      realtimeChannel: session.realtimeChannel,
+    };
     this.hostPeers.set(invite.guest.id, record);
     this.bindHostChannel(record, session.channel, () => {
       if (this.qrHostSession !== session) return;
@@ -381,6 +397,7 @@ export class MultiplayerService {
       this.qrHostSession = null;
       this.party = { ...this.party, pairingStatus: undefined, invite: undefined, error: undefined };
     });
+    this.bindRealtimeChannel(record, session.realtimeChannel);
     session.connection.onconnectionstatechange = () => {
       const state = session.connection.connectionState;
       if (state === "disconnected" && this.qrHostSession === session) return;
@@ -410,6 +427,7 @@ export class MultiplayerService {
     this.qrHostSession = null;
     if (this.hostPeers.get(record.member.id) === record) this.hostPeers.delete(record.member.id);
     session.channel.close();
+    session.realtimeChannel.close();
     session.connection.close();
     const hasRemoteMember = this.party.members.some((member) => member.id !== this.party.localMember?.id);
     this.party = {
@@ -429,10 +447,12 @@ export class MultiplayerService {
     this.party = { ...this.party, pendingJoinRequests: this.party.pendingJoinRequests.filter((candidate) => candidate.id !== requestId) };
     const connection = new RTCPeerConnection({ iceServers: [] });
     const channel = connection.createDataChannel("interactive-vault", { ordered: true });
+    const realtimeChannel = connection.createDataChannel("interactive-vault-realtime", { ordered: false, maxRetransmits: 0 });
     const member: MultiplayerMember = { id: request.id, name: request.name, isHost: false };
-    const record: PeerConnectionRecord = { member, connection, channel };
+    const record: PeerConnectionRecord = { member, connection, channel, realtimeChannel };
     this.hostPeers.set(request.id, record);
     this.bindHostChannel(record, channel);
+    this.bindRealtimeChannel(record, realtimeChannel);
     connection.onconnectionstatechange = () => {
       if (["failed", "closed", "disconnected"].includes(connection.connectionState)) this.removeHostPeer(request.id);
     };
@@ -469,13 +489,16 @@ export class MultiplayerService {
     this.qrHostSession = null;
     if (qrHostSession?.connectionTimeout !== undefined) globalThis.clearTimeout(qrHostSession.connectionTimeout);
     qrHostSession?.channel.close();
+    qrHostSession?.realtimeChannel.close();
     qrHostSession?.connection.close();
     const guestPeer = this.guestPeer;
     this.guestPeer = null;
     guestPeer?.channel?.close();
+    guestPeer?.realtimeChannel?.close();
     guestPeer?.connection.close();
     for (const peer of this.hostPeers.values()) {
       peer.channel?.close();
+      peer.realtimeChannel?.close();
       peer.connection.close();
     }
     this.hostPeers.clear();
@@ -538,11 +561,34 @@ export class MultiplayerService {
     this.sendWire({ v: 1, type: "game-message", from: local.id, to: match.peerId, matchId: match.id, projectId, payload });
   }
 
+  private sendRealtimeGameMessage(projectId: string, payload: MultiplayerJson): void {
+    const match = this.activeMatch;
+    const local = this.party.localMember;
+    if (!match || match.projectId !== projectId || !local) throw new Error("当前游戏没有活动的联机对局");
+    const message = { v: 1, type: "game-message", from: local.id, to: match.peerId, matchId: match.id, projectId, payload } satisfies PartyWireMessage;
+    const serialized = JSON.stringify(message);
+    if (serialized.length > MAX_GAME_MESSAGE_BYTES) throw new Error("联机游戏消息过大");
+    const channel = local.isHost
+      ? this.hostPeers.get(match.peerId)?.realtimeChannel
+      : this.guestPeer?.realtimeChannel;
+    if (channel?.readyState === "open") channel.send(serialized);
+    else this.sendWire(message);
+  }
+
   private getGameBufferedAmount(projectId: string): number {
     const match = this.activeMatch;
     const local = this.party.localMember;
     if (!match || match.projectId !== projectId || !local) return 0;
     const channel = local.isHost ? this.hostPeers.get(match.peerId)?.channel : this.guestPeer?.channel;
+    return channel?.readyState === "open" ? channel.bufferedAmount : 0;
+  }
+
+  private getRealtimeGameBufferedAmount(projectId: string): number {
+    const match = this.activeMatch;
+    const local = this.party.localMember;
+    if (!match || match.projectId !== projectId || !local) return 0;
+    const record = local.isHost ? this.hostPeers.get(match.peerId) : this.guestPeer;
+    const channel = record?.realtimeChannel?.readyState === "open" ? record.realtimeChannel : record?.channel;
     return channel?.readyState === "open" ? channel.bufferedAmount : 0;
   }
 
@@ -603,8 +649,13 @@ export class MultiplayerService {
     const record: PeerConnectionRecord = { member: hostMember, connection, channel: null };
     this.guestPeer = record;
     connection.ondatachannel = (event) => {
-      record.channel = event.channel;
-      this.bindGuestChannel(record, event.channel);
+      if (event.channel.label === "interactive-vault-realtime") {
+        record.realtimeChannel = event.channel;
+        this.bindRealtimeChannel(record, event.channel);
+      } else {
+        record.channel = event.channel;
+        this.bindGuestChannel(record, event.channel);
+      }
     };
     connection.onconnectionstatechange = () => {
       if (["failed", "closed", "disconnected"].includes(connection.connectionState)) {
@@ -649,6 +700,13 @@ export class MultiplayerService {
     channel.onclose = () => this.disconnectGuest(record, "房主已断开联机小队");
   }
 
+  private bindRealtimeChannel(record: PeerConnectionRecord, channel: RTCDataChannel): void {
+    channel.onmessage = (event) => this.receiveWire(event.data, this.party.localMember?.isHost ? record.member.id : undefined);
+    channel.onclose = () => {
+      if (record.realtimeChannel === channel) record.realtimeChannel = null;
+    };
+  }
+
   private disconnectGuest(record: PeerConnectionRecord, reason: string): void {
     if (this.guestPeer !== record) return;
     this.guestPeer = null;
@@ -656,6 +714,7 @@ export class MultiplayerService {
     if (signal) signal.stopped = true;
     this.guestSignal = null;
     record.channel?.close();
+    record.realtimeChannel?.close();
     record.connection.close();
     for (const pending of this.pendingChallenges.values()) pending.resolve("cancelled");
     this.pendingChallenges.clear();
@@ -778,6 +837,7 @@ export class MultiplayerService {
     const record = this.hostPeers.get(peerId);
     if (!record) return;
     record.channel?.close();
+    record.realtimeChannel?.close();
     record.connection.close();
     this.hostPeers.delete(peerId);
     const members = this.party.members.filter((member) => member.id !== peerId);

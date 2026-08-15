@@ -7,6 +7,7 @@ interface TestPeerRecord {
   member: { id: string; name: string; isHost: boolean };
   connection: RTCPeerConnection;
   channel: RTCDataChannel;
+  realtimeChannel?: RTCDataChannel | null;
 }
 
 interface MultiplayerServiceInternals {
@@ -26,6 +27,8 @@ class FakeDataChannel {
   onclose: ((event: Event) => void) | null = null;
   send = vi.fn();
 
+  constructor(readonly label = "interactive-vault") {}
+
   close(): void {
     this.readyState = "closed";
   }
@@ -39,9 +42,10 @@ class FakePeerConnection {
   ondatachannel: ((event: RTCDataChannelEvent) => void) | null = null;
   onconnectionstatechange: (() => void) | null = null;
   readonly channel = new FakeDataChannel();
+  readonly realtimeChannel = new FakeDataChannel("interactive-vault-realtime");
 
-  createDataChannel(): RTCDataChannel {
-    return this.channel as unknown as RTCDataChannel;
+  createDataChannel(label: string): RTCDataChannel {
+    return (label === "interactive-vault-realtime" ? this.realtimeChannel : this.channel) as unknown as RTCDataChannel;
   }
 
   async createOffer(): Promise<RTCSessionDescriptionInit> {
@@ -185,6 +189,47 @@ describe("MultiplayerService realtime transport", () => {
     };
 
     expect(projectFacade(service).getBufferedAmount?.()).toBe(73_000);
+  });
+
+  it("sends replaceable snapshots on the unordered realtime channel", () => {
+    const service = new MultiplayerService();
+    const internals = service as unknown as MultiplayerServiceInternals;
+    const control = new FakeDataChannel();
+    const realtime = new FakeDataChannel("interactive-vault-realtime");
+    control.readyState = "open";
+    realtime.readyState = "open";
+    realtime.bufferedAmount = 19_000;
+    const record = {
+      member: { id: "guest", name: "客机", isHost: false },
+      channel: control as unknown as RTCDataChannel,
+      realtimeChannel: realtime as unknown as RTCDataChannel,
+      connection: { close: vi.fn() } as unknown as RTCPeerConnection,
+    };
+    internals.party = {
+      status: "connected",
+      canHost: true,
+      canScan: true,
+      localMember: { id: "host", name: "房主", isHost: true },
+      members: [{ id: "host", name: "房主", isHost: true }, record.member],
+      pendingJoinRequests: [],
+    };
+    internals.hostPeers.set(record.member.id, record);
+    internals.activeMatch = {
+      id: "match-1",
+      projectId: "gomoku",
+      peerId: record.member.id,
+      peerName: record.member.name,
+      role: "challenger",
+      protocolVersion: 1,
+      settings: null,
+    };
+
+    const facade = projectFacade(service);
+    facade.sendRealtime?.({ frame: 18 });
+
+    expect(realtime.send).toHaveBeenCalledOnce();
+    expect(control.send).not.toHaveBeenCalled();
+    expect(facade.getRealtimeBufferedAmount?.()).toBe(19_000);
   });
 });
 

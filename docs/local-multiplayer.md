@@ -60,7 +60,7 @@ Runtime 负责：
 - 每款游戏的协议版本、规则设置、玩家角色和权威模型；
 - 对远端 payload 的完整业务校验；
 - 状态快照、输入频率、预测/插值与胜负；
-- 使用 `getBufferedAmount()` 进行发送背压，丢弃可被新状态替代的过期快照；
+- 使用 `sendRealtime()` 发送可替代快照，并通过 `getRealtimeBufferedAmount()` 进行发送背压，丢弃过期状态；控制指令继续使用可靠的 `send()`；
 - 对局结束时调用 `endMatch()`。
 
 ## 当前限制

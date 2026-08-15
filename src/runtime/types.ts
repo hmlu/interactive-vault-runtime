@@ -77,7 +77,9 @@ export interface ProjectMultiplayer {
   leaveParty(): void;
   challenge(memberId: string, options: MultiplayerChallengeOptions): Promise<MultiplayerChallengeResult>;
   send(payload: MultiplayerJson): void;
+  sendRealtime?(payload: MultiplayerJson): void;
   getBufferedAmount?(): number;
+  getRealtimeBufferedAmount?(): number;
   onMessage(listener: (payload: MultiplayerJson) => void): () => void;
   endMatch(): void;
 }
