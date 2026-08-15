@@ -108,6 +108,7 @@ export class MultiplayerService {
       leaveParty: () => this.leaveParty(),
       challenge: (memberId, options) => this.challenge(project, memberId, options),
       send: (payload) => this.sendGameMessage(projectId, payload),
+      getBufferedAmount: () => this.getGameBufferedAmount(projectId),
       onMessage: (listener) => this.onProjectMessage(projectId, listener),
       endMatch: () => this.endMatch(projectId),
     };
@@ -535,6 +536,14 @@ export class MultiplayerService {
     const serialized = JSON.stringify(payload);
     if (serialized.length > MAX_GAME_MESSAGE_BYTES) throw new Error("联机游戏消息过大");
     this.sendWire({ v: 1, type: "game-message", from: local.id, to: match.peerId, matchId: match.id, projectId, payload });
+  }
+
+  private getGameBufferedAmount(projectId: string): number {
+    const match = this.activeMatch;
+    const local = this.party.localMember;
+    if (!match || match.projectId !== projectId || !local) return 0;
+    const channel = local.isHost ? this.hostPeers.get(match.peerId)?.channel : this.guestPeer?.channel;
+    return channel?.readyState === "open" ? channel.bufferedAmount : 0;
   }
 
   private onProjectMessage(projectId: string, listener: (payload: MultiplayerJson) => void): () => void {

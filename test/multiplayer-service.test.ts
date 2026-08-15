@@ -20,6 +20,7 @@ interface MultiplayerServiceInternals {
 
 class FakeDataChannel {
   readyState: RTCDataChannelState = "connecting";
+  bufferedAmount = 0;
   onopen: ((event: Event) => void) | null = null;
   onmessage: ((event: MessageEvent) => void) | null = null;
   onclose: ((event: Event) => void) | null = null;
@@ -149,6 +150,41 @@ describe("MultiplayerService guest disconnection", () => {
 
     expect(internals.party.status).toBe("connected");
     expect(internals.party.members).toHaveLength(2);
+  });
+});
+
+describe("MultiplayerService realtime transport", () => {
+  it("reports the active match channel backlog to the game", () => {
+    const service = new MultiplayerService();
+    const internals = service as unknown as MultiplayerServiceInternals;
+    const channel = new FakeDataChannel();
+    channel.readyState = "open";
+    channel.bufferedAmount = 73_000;
+    const record = {
+      member: { id: "guest", name: "客机", isHost: false },
+      channel: channel as unknown as RTCDataChannel,
+      connection: { close: vi.fn() } as unknown as RTCPeerConnection,
+    };
+    internals.party = {
+      status: "connected",
+      canHost: true,
+      canScan: true,
+      localMember: { id: "host", name: "房主", isHost: true },
+      members: [{ id: "host", name: "房主", isHost: true }, record.member],
+      pendingJoinRequests: [],
+    };
+    internals.hostPeers.set(record.member.id, record);
+    internals.activeMatch = {
+      id: "match-1",
+      projectId: "gomoku",
+      peerId: record.member.id,
+      peerName: record.member.name,
+      role: "challenger",
+      protocolVersion: 1,
+      settings: null,
+    };
+
+    expect(projectFacade(service).getBufferedAmount?.()).toBe(73_000);
   });
 });
 
